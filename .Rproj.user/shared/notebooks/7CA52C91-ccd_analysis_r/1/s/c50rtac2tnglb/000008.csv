@@ -1,3 +1,0 @@
-"0",""
-"0","hist.educ <- ggplot(data, aes(x=education, fill=default_r)) + geom_bar()"
-"0","hist.educ"

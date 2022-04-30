@@ -10,9 +10,9 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(warning = FALSE)
 library(readxl)
 library(ggplot2)
-library(tidyr)
-library(dplyr)
 library(gridExtra)
+library(DMwR)
+library(dplyr)
 ```
 
 ```{r load_data}
@@ -28,13 +28,13 @@ data[data$marital == 3, 'marital'] <- 'Others'
 marital.levels <- c("Single", "Married", "Others")
 data$marital <- factor(data$marital, levels = marital.levels)
 
-data[data$education >= 4, 'education'] <- 'Others'
+data[data$education >= 4, 'education'] <- 4
 # Education (1 = graduate school; 2 = university; 3 = high school; 4 = others)
 data[data$education==1, 'education'] <- 'Graduate School'
 data[data$education==2, 'education'] <- 'University'
 data[data$education==3, 'education'] <- 'High School'
 data[data$education==4, 'education'] <- 'Others'
-education.levels <- c("Graduate School", "University", "High School", "Others")
+education.levels <- c("Others", "High School", "Graduate School", "University")
 data$education <- factor(data$education, levels=education.levels)
 
 # Gender (1 = male; 2 = female)
@@ -51,7 +51,7 @@ data$gender <- factor(data$gender, levels=gender_levels)
 # data$rs_apr <- factor(data$rs_apr)
 data[data$default_r==1, 'default_r'] <- 'Yes'
 data[data$default_r==0, 'default_r'] <- 'No'
-default_levels <- c("Yes", "No")
+default_levels <- c("No", "Yes")
 data$default_r <- factor(data$default_r, levels=default_levels)
 
 ```
@@ -101,8 +101,8 @@ bxpt.default <- ggplot(data, aes(x=default_r, y=credit_limit)) +
 grid.arrange(hist.default, bxpt.default, nrow=1)
 # H0: Credit limit of those who default is less than that of who pay promptly
 # H1: Credit limit of those who default is higher than that of who pay promptly
-ttest.credit_limit <- t.test(data[data$default_r==1, 'credit_limit'], 
-                             mu=mean(data[data$default_r==0, 'credit_limit']),
+ttest.credit_limit <- t.test(data[data$default_r=="Yes", 'credit_limit'], 
+                             mu=mean(data[data$default_r=="No", 'credit_limit']),
                              alternative='greater')
 ttest.credit_limit
 
@@ -128,8 +128,8 @@ bxpt.age <- ggplot(data, aes(x=default_r, y=age)) +
 
 grid.arrange(hist.age, bxpt.age, nrow=1)
 
-ttest.age_default <- t.test(data[data$default_r==1, 'age'], 
-                            data[data$default_r==0, 'age'])
+ttest.age_default <- t.test(data[data$default_r=="Yes", 'age'], 
+                            data[data$default_r=="No", 'age'])
 ttest.age_default
 ```
 
@@ -147,30 +147,41 @@ data[data$age >= 66, "age_group"] <- "Retired"
 data$age_group <- factor(data$age_group, levels=c("Young", "Professionals", 
                                                   "Old", "Retired"))
 
+age_group_default_cont <- table(data$default_r, data$age_group)
+chisq.age_default <- chisq.test(age_group_default_cont)
+
+age_group_default_cont <- data.frame(age_group_default_cont)
+colnames(age_group_default_cont) <- c("Default", "Age_Group", "Freq")
+
+
 bxpt.age_group_default <- ggplot(data, aes(x=age_group, y=age)) +
                           geom_boxplot(outlier.color='red', outlier.shape=8,
                                        fill='gray') +
                           stat_boxplot(geom='errorbar', width=0.5)
 
-bar.age_group_default <- ggplot(data, aes(x=age_group, fill=default_r)) +
-                         geom_bar()
+bar.age_group_default <- ggplot(age_group_default_cont, aes(x=Age_Group, y=Freq, fill=Default)) +
+                         geom_bar(stat='identity', position='identity', alpha=0.55)
 
 grid.arrange(bxpt.age_group_default, bar.age_group_default, nrow=1)
 
 # tmp_data <- data %>% group_by(age_group) %>% summarise(default_count = count(default_r))
-age_group_default_cont <- table(data$default_r, data$age_group)
-row.names(age_group_default_cont) <- c("Not Default", "Default")
-age_group_default_cont
+
+chisq.age_default
 ```
 ## Education and Default
 
 ```{r}
 
-hist.educ <- ggplot(data, aes(x=education, fill=default_r)) + geom_bar()
-hist.educ
-
 educ_default_cont <- table(data$default, data$education)
 chisq.educ_default <- chisq.test(educ_default_cont)
+
+educ_default_cont <- data.frame(educ_default_cont)
+colnames(educ_default_cont) <- c("Default", "Education", "Freq")
+
+hist.educ <- ggplot(educ_default_cont, aes(x=Education, y=Freq, fill=Default)) + 
+             geom_bar(stat='identity', position='identity', alpha=0.65)
+
+hist.educ
 chisq.educ_default
 ```
 
@@ -183,12 +194,13 @@ chisq.educ_default
 marital_default_cont <- table(data$default_r, data$marital)
 chisq.marital_default <- chisq.test(marital_default_cont)
 
-row.names(marital_default_cont) <- c('No', 'Yes')
-colnames(marital_default_cont) <- c('Married', 'Single', 'Others')
+marital_default_cont <- data.frame(marital_default_cont)
+colnames(marital_default_cont) <- c("Default", "Marital", "Freq")
 
-ggplot(data, aes(x=marital, fill=default_r)) + geom_bar() + xlab('Marital')
+ggplot(marital_default_cont, aes(x=Marital, y=Freq, fill=Default)) + 
+geom_bar(stat='identity', position='identity', alpha=0.65) + xlab('Marital')
 
-marital_default_cont
+# marital_default_cont
 
 chisq.marital_default
 
@@ -199,17 +211,40 @@ chisq.marital_default
 ## Gender and default
 ```{r}
 
-hist.gender_default <- ggplot(data, aes(x=gender, fill=default_r)) + geom_bar()
-hist.gender_default
-
 gender_default_cont <- table(data$gender, data$default_r)
-gender_default_cont
+chisq.gender_default <- chisq.test(gender_default_cont)
+gender_default_cont <- data.frame(gender_default_cont)
+colnames(gender_default_cont) <- c("Gender", "Default", "Freq")
+
+hist.gender_default <- ggplot(gender_default_cont, aes(x=Gender, y=Freq, fill=Default)) +
+                        geom_bar(stat='identity', position='identity', alpha=0.65)
+hist.gender_default
+chisq.gender_default
 ```
 
-```{r}
+```{r due}
+library(dplyr)
+ag_due_summary <-  data %>% 
+                   dplyr::group_by(age_group) %>% 
+                   dplyr::summarize(total_bill = median(bs_sep + bs_aug + bs_july + bs_june + bs_may + bs_apr),
+                                    total_paid = median(ap_sep + ap_aug + ap_july + ap_june + ap_may + ap_apr),
+                                    credit_limit = median(credit_limit))
 
+ag_due_summary <- data.frame(ag_due_summary)
+ag_due_summary$due <- ag_due_summary$total_bill - ag_due_summary$total_paid
+ag_due_summary$due_percent <- (ag_due_summary$due/ag_due_summary$credit_limit) * 100
+
+library(plotrix)
+med_due <- round(ag_due_summary$due_percent)
+age_labels <- ag_due_summary$age_group
+lbls <- paste(age_labels, ' ', med_due, '%')
+pie(med_due, labels=lbls, col=rainbow(length(lbls)), main="Median Due by age groups")
+
+unloadNamespace('plotrix')
+rmarkdown::paged_table(ag_due_summary)
 ```
 
+# Modeling
 
 
 
