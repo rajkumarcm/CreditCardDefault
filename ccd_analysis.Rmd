@@ -1,0 +1,97 @@
+---
+title: "CreditCardDefault"
+author: "Rajkumar Conjeevaram Mohan"
+date: "28/04/2022"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+library(readxl)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+```
+
+```{r load_data}
+data.orig <- read_xls(path='default of credit card clients.xls',
+                      sheet='Data',  skip=1)
+data.orig <- data.frame(data.orig)
+colnames(data.orig) <- c('id', 'total_credit', 'gender', 'education', 'marital', 'age', 'rs_sep', 'rs_aug', 'rs_july', 'rs_june', 'rs_may', 'rs_apr', 'bs_sep', 'bs_aug', 'bs_july', 'bs_june', 'bs_may', 'bs_apr', 'ap_sep', 'ap_aug', 'ap_july', 'ap_june', 'ap_may', 'ap_apr', 'default_r')
+
+data.orig$marital <- factor(data.orig$marital)
+data.orig$gender <- factor(data.orig$gender)
+data.orig$education <- factor(data.orig$education)
+data.orig$rs_sep <- factor(data.orig$rs_sep)
+data.orig$rs_aug <- factor(data.orig$rs_aug)
+data.orig$rs_july <- factor(data.orig$rs_july)
+data.orig$rs_june <- factor(data.orig$rs_june)
+data.orig$rs_may <- factor(data.orig$rs_may)
+data.orig$default_r <- factor(data.orig$default_r)
+# data.orig
+```
+
+
+# Data Description
+```{r}
+str(data.orig)
+```
+
+# Data overview
+```{r, results='markup'}
+
+```
+
+# Data Imbalance
+```{r}
+ggplot(data.orig, aes(x=default_r)) + 
+geom_bar() +
+xlab('Credit Card Default') +
+ggtitle('Imbalanced distribution of response variable')  
+```
+
+# EDA
+
+You can embed Shiny inputs and outputs in your document. Outputs are automatically updated whenever inputs change.  This demonstrates how a standard R plot can be made interactive by wrapping it in the Shiny `renderPlot` function. The `selectInput` and `sliderInput` functions create the input widgets used to drive the plot.
+
+```{r eruptions, echo=FALSE}
+inputPanel(
+  selectInput("n_breaks", label = "Number of bins:",
+              choices = c(10, 20, 35, 50), selected = 20),
+  
+  sliderInput("bw_adjust", label = "Bandwidth adjustment:",
+              min = 0.2, max = 2, value = 1, step = 0.2)
+)
+
+renderPlot({
+  hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
+       xlab = "Duration (minutes)", main = "Geyser eruption duration")
+  
+  dens <- density(faithful$eruptions, adjust = input$bw_adjust)
+  lines(dens, col = "blue")
+})
+```
+
+## Embedded Application
+
+It's also possible to embed an entire Shiny application within an R Markdown document using the `shinyAppDir` function. This example embeds a Shiny application located in another directory:
+
+```{r tabsets, echo=FALSE}
+shinyAppDir(
+  system.file("examples/06_tabsets", package = "shiny"),
+  options = list(
+    width = "100%", height = 550
+  )
+)
+```
+
+Note the use of the `height` parameter to determine how much vertical space the embedded application should occupy.
+
+You can also use the `shinyApp` function to define an application inline rather then in an external directory.
+
+In all of R code chunks above the `echo = FALSE` attribute is used. This is to prevent the R code within the chunk from rendering in the document alongside the Shiny components.
+
+
+

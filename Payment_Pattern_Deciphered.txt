@@ -1,0 +1,10 @@
+Bill Month	Bill amount	Amount Paid	Paid Month
+
+March		NA		0		April
+April		0		0		May
+May		0		0		June
+June		0		0		July
+July		689		689		Aug
+Aug		3102		0		Sep
+Sep		3913		?		Oct
+
