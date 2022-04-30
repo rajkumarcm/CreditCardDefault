@@ -43,12 +43,12 @@ data[data$gender==2, 'gender'] <- 'Female'
 gender_levels <- c("Male", "Female")
 data$gender <- factor(data$gender, levels=gender_levels)
 
-# data$rs_sep <- factor(data$rs_sep)
-# data$rs_aug <- factor(data$rs_aug)
-# data$rs_july <- factor(data$rs_july)
-# data$rs_june <- factor(data$rs_june)
-# data$rs_may <- factor(data$rs_may)
-# data$rs_apr <- factor(data$rs_apr)
+data$rs_sep <- factor(data$rs_sep)
+data$rs_aug <- factor(data$rs_aug)
+data$rs_july <- factor(data$rs_july)
+data$rs_june <- factor(data$rs_june)
+data$rs_may <- factor(data$rs_may)
+data$rs_apr <- factor(data$rs_apr)
 data[data$default_r==1, 'default_r'] <- 'Yes'
 data[data$default_r==0, 'default_r'] <- 'No'
 default_levels <- c("No", "Yes")
@@ -234,19 +234,19 @@ ag_due_summary <- data.frame(ag_due_summary)
 ag_due_summary$due <- ag_due_summary$total_bill - ag_due_summary$total_paid
 ag_due_summary$due_percent <- (ag_due_summary$due/ag_due_summary$credit_limit) * 100
 
-library(plotrix)
 med_due <- round(ag_due_summary$due_percent)
 age_labels <- ag_due_summary$age_group
 lbls <- paste(age_labels, ' ', med_due, '%')
 pie(med_due, labels=lbls, col=rainbow(length(lbls)), main="Median Due by age groups")
 
-unloadNamespace('plotrix')
 rmarkdown::paged_table(ag_due_summary)
 ```
 
 # Modeling
 
+```{r}
 
+```
 
 
 
