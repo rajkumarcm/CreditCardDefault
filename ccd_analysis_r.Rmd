@@ -67,13 +67,18 @@ data$default_r <- factor(data$default_r, levels=default_levels)
 
 # Introduction
 
-Since the beginning in 1990, Taiwan banks, in order to improve their financial market and expand their profit, started lending money to real estate businesses. When real estate businesses started saturating, they decided to focus on credit card businesses and started issuing cards to many individuals regardless of their repayment capacity. One of their primary targets was school going young students, who were easily exploited given their lack of knowledge in finance and other risks involved. As per Taiwanese Department of Health report, the suicide rate was increased to $22.9%$ in 2006 compared to 2005 mainly due to debt concerns. Many lost their homes, some resorted to illegal engagement for repayment, all caused by their inability to repay the debt. In 2006, the debt from credit card and cash card reached about $\$268$ billion USD and caused a financial crisis that blew the consumer finance confidence. In order to control the situation and prevent cards from being further issued to ineligible consumers, Financial Department of Taiwanese government issued regulation notice to banks increasing the income and other criteria to apply for credit card.  
+Since the beginning in 1990, Taiwan banks, in order to improve their financial market and expand their profit, started lending money to real estate businesses. When real estate businesses started saturating, they decided to focus on credit card businesses and started issuing cards to many individuals regardless of their repayment capacity. One of their primary targets was school going young students, who were easily exploited given their lack of knowledge in finance and other risks involved. As per Taiwanese Department of Health report, the suicide rate was increased to $22.9%$ in 2006 compared to 2005 mainly over debt concerns. Many lost their homes, some resorted to illegal engagement for repayment, all caused by their inability to repay the debt. In 2006, the debt from credit card and cash card reached about $\$268$ billion USD and caused a financial crisis that blew the consumer finance confidence. In order to control the situation and prevent cards from being further issued to ineligible consumers, Financial Department of Taiwanese government issued regulation notice to banks increasing the income and other criteria to apply for credit card.  
 
-Several financial firms around the globe are taking stringent measures to prevent credit card default by using credit history and other payment patterns using Machine Learning models that help in predicting a potential client who possibly will default on their bill. In order to further understand what factors constitute to default behavior and by what factor the chances to default increase, I wish to use Exploratory Data Analysis along with hypothesis test answer some of the preconceived opinions, and use ML models such as Logistic Regression, Decision Tree, Random Forest, Extremely Randomized Forest for predicting client who may default.  
+Several financial firms around the globe are taking stringent measures to prevent credit card default by using credit history and other payment patterns using Machine Learning models that help in predicting a potential client who possibly will default on their bill. In order to further understand what factors constitute to default behavior and by what factor the chances to default increase, I wish to use Exploratory Data Analysis along with hypothesis test to answer some of the preconceived opinions, and use ML models such as Logistic Regression, Decision Tree, Random Forest, Extremely Randomized Forest for predicting client who may default.  
 
 # SMART Questions
 
-1. 
+1. Are people with better educational qualification exhibit better repayment pattern?  
+2. Is there a specific gender that is more prone to making default?  
+3. Are mid-age people less likely to default as they may have a secured job?  
+4. Are married people more likely to default as to the increased financial requirement for them?  
+5. Can reducing the credit limit in turn reduce the default risk at the same time not lose the client?
+(Subject to revision after EDA)  
 
 # Data
 
@@ -84,7 +89,8 @@ str(data)
 
 ## Overview
 ```{r, results='markup'}
-rmarkdown::paged_table(data)
+rmarkdown::paged_table(head(data, 5))
+rmarkdown::paged_table(tail(data, 5))
 ```
 
 ## Distribution of Imbalanced data
@@ -99,6 +105,10 @@ bxpt.default <- ggplot(data, aes(x=default_r, y=credit_limit)) +
 
 grid.arrange(hist.default, bxpt.default, nrow=1)
 ```
+
+### Understanding of SMOTE  
+
+From my understanding, there are a few ways to handle imbalanced dataset and some of them include oversampling minority class data, data augmentation, etc,. One of the most common techniques in oversampling minority class is SMOTE (Synthetic Minority Oversampling Technique). SMOTE works by first fitting a KNN model (compute pair-wise distance matrix), then randomly select a sample of minority class and pick the `k` neighbors. When an adjacency matrix is created using the `k` neighbors, we randomly sample features between the range of selected pair of neighbors. This way, as we increase the sampling size, we end up with more samples in minority class.    
 
 ```{r smote}
 data <- SMOTE(default_r~., data=data, perc.over=280)
@@ -143,12 +153,20 @@ bxpt.age <- ggplot(data, aes(x=default_r, y=age)) +
 
 grid.arrange(hist.age, bxpt.age, nrow=1)
 
+# Confidence inteveral for those who default
+ttest_1s_default_age <- t.test(data[data$default_r=="Yes", "age"])
+
+# Confidence interval for those who do not default
+ttest_1s_ndefault_age <- t.test(data[data$default_r=="No", "age"])
+
 ttest.age_default <- t.test(data[data$default_r=="Yes", 'age'], 
                             data[data$default_r=="No", 'age'])
 ttest.age_default
 ```
 
 The `t.test` on age between those defaulted on their credit card bills and those who did not, returned a `p.value` of `r ttest.age_default$p.value`. In simple words, the age does have a connection on those who default.  
+
+Since difference in age between those who default and who do not is elusive on the right side boxplot, I have performed a 1-sample t-test to determine the 95% confidence interval. While the age of those who default typically fall between `r ttest_1s_default_age$conf.int[1:2]`, the age of those who do not typically fall between `r ttest_1s_ndefault_age$conf.int[1:2]` at 95% confidence level. There is a strong overlap in the confidence interval and I believe it is difficult to understand from the macroscopic level. Perhaps we need to use the power of EDA to break down the age by different categories to further understand the pattern.  
 
 ```{r, fig.height=5, fig.width=12}
 # Group them so we can have an overall understanding of at which age the default
@@ -183,6 +201,9 @@ grid.arrange(bxpt.age_group_default, bar.age_group_default, nrow=1)
 
 chisq.age_default
 ```
+
+I have grouped age into different categories so that it is possible to understand who typically default and their individual circumstances. As it can be seen from the rightmost plot, it would be the young people who default the most, and those who are in mid-age or seniors have relatively less default frequency. I believe it would throw more light if we could visualize the educational qualification of Young, other age groups. Perhaps we can observe the connection of default with education.  
+
 ## Education and Default
 
 ```{r}
@@ -199,6 +220,8 @@ hist.educ <- ggplot(educ_default_cont, aes(x=Education, y=Freq, fill=Default)) +
 hist.educ
 chisq.educ_default
 ```
+
+It was my initial understanding that it would be school going young students who were the primary target for the credit card business, but the results show those with University qualification default the most. Although it makes sense that the financial requirement of students at the University level may be inclined, the conclusion I would like draw from this is that the initial news report mentioned the banks targeted school students as they were apparently the ones who weren't applying for credit cards and I believe, it was a conscious move to expand their business and does not necessarily mean they were the ones who most default.  
 
 ## Marital and Default
 
@@ -221,7 +244,7 @@ chisq.marital_default
 
 ```
 
-
+I tried ignoring the `Others` column from including in contingency table and re-running the chi-squared test and it still produced a `p.value` of `r chisq.marital_default$p.value` pointing to the fact that two groups `Single` and `Married` do have an effect on `default`.  
 
 ## Gender and default
 ```{r}
@@ -236,6 +259,47 @@ hist.gender_default <- ggplot(gender_default_cont, aes(x=Gender, y=Freq, fill=De
 hist.gender_default
 chisq.gender_default
 ```
+
+From the above plot, it can be understood that Females are more likely to default compared to Males. Why is this the case ? A possible cause could be a bias in education. Let's understand this further.  
+
+```{r gender_education, fig.height=5, fig.width=11}
+
+gender_educ_summary <- data %>% 
+                       group_by(gender) %>% 
+                       summarize(University = sum(education=='University'),
+                                 GraduateSchool = sum(education=='Graduate School'),
+                                 HighSchool = sum(education=='High School'),
+                                 Others = sum(education=='Others'))
+
+max_ylim <- max(data.frame(gender_educ_summary)[2:5])
+
+hist.male_educ <- ggplot(data[data$gender=='Male',], aes(x=education)) +
+                  geom_bar() + ggtitle('Education of Male') +
+                  ylim(c(0, max_ylim))
+hist.female_educ <- ggplot(data[data$gender=='Female',], aes(x=education)) +
+                    geom_bar() + ggtitle('Education of Female') +
+                    ylim(c(0, max_ylim))
+
+grid.arrange(hist.male_educ, hist.female_educ, nrow=1)
+```
+
+The results were surprising as it was believed there was gap in education in Females that led to more defaulting, but from the plot it appears they are more qualified than Males. Now I believe I can make a connection of this finding to a plot under `Education and Default` that showed University goers or those who hold a University level qualification are the ones with more financial demands. In other words, they are the ones who most typically default. Hence the conclusion is, since Females are the ones with most University level qualification, they often face difficulties in repaying their credit card bill.  
+
+
+## Repayment Status Pattern
+
+The data comes with past repayment status between April to September.  
+
+A quick legend of the numbers on the x-axis for the plot below:  
+
+Value | Description
+---- | ----
+-1 | Paid promptly
+0 | No consumption
+1 | Due for a month
+. | .
+9 | Due for 9 months or over  
+
 ```{r rs_june, fig.height=15, fig.width=8}
 
 sep_df <- ggplot(data[data$default_r=='Yes',], aes(x=rs_sep, y=)) + 
@@ -293,6 +357,11 @@ grid.arrange(april_df, april_ndf, may_df, may_ndf, june_df, june_ndf,
 
 ```
 
+As it can be seen from the bunch of plots above, those who default **always** exhibit late payment or dues compared to those who do not. Observing the repayment status plot of those who do not default, it can be seen that 0 and -1 have higher frequencies compared to that of defaulters. This is one of the most critical information that banks can use to gauge their repayment capacity before deciding on their credit limit.  
+
+## Summary of bills, payments and dues by age group  
+
+The values in the table represent the median value.  
 
 ```{r due, results='markup'}
 library(dplyr)
@@ -315,6 +384,7 @@ pie(med_due, labels=lbls, col=rainbow(length(lbls)), main="Median Due by age gro
 
 
 ```
+
 ```{r}
 getproportion <- function(x)
 {
@@ -354,19 +424,53 @@ pie(young.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education lev
 
 # Mid-age Adults
 lbls <- paste(education.levels, ' ', midage_adults.educ_perc, '%')
-pie(midage_adults.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Mid-age adults")
+pie.midage <- pie(midage_adults.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Mid-age adults")
 
 # Seniors
 lbls <- paste(education.levels, ' ', seniors.educ_perc, '%')
-pie(seniors.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Seniors")
+pie.seniors <- pie(seniors.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Seniors")
+grid.arrange(pie.midage, pie.seniors, nrow=1)
 ```
 
 # Modeling
 
+## Spearman Correlation plot
+```{r, fig.width=12, fig.height=6}
+
+data_f <- data
+data_f$gender <- rank(data_f$gender)
+data_f$education <- rank(data_f$education)
+data_f$marital <- rank(data_f$marital)
+data_f$age <- rank(data_f$age)
+
+data_f$rs_sep <- rank(data_f$rs_sep)
+data_f$rs_aug <- rank(data_f$rs_aug)
+data_f$rs_july <- rank(data_f$rs_july)
+data_f$rs_june <- rank(data_f$rs_june)
+data_f$rs_may <- rank(data_f$rs_may)
+data_f$rs_apr <- rank(data_f$rs_apr)
+
+data_f$default_r <- rank(data_f$default_r)
+data_f$age_group <- rank(data_f$age_group)
+
+corrplot::corrplot(cor(data_f[, -1], method='spearman'), method='circle')
+```
+
+## Full model using Generalised Linear Model
 ```{r}
 full_model <- glm('default_r~.-id-age_group', data=data, family='binomial')
 # full_model
 summary(full_model)
+```
+
+```{r leaps}
+library("leaps")
+data.renamed <- data
+cnames <- colnames(data.renamed)
+cnames[which(cnames == 'default_r')] <- 'y'
+colnames(data.renamed) <- cnames
+reg.leaps <- regsubsets(y~., data = data.renamed, nbest = 1, method = "exhaustive", really.big = T)  # leaps,
+plot(reg.leaps, scale = "adjr2", main = "Adjusted R^2")
 ```
 
 ```{r metrics_fn}
@@ -384,7 +488,6 @@ get_cm <- function(predictions, model, co, g_truth)
     pred <- pred.list[i]
     cm[pred, actual] <- cm[pred, actual] + 1
   }
-  colnames(cm) <- c('Act.Pos', 'Act.Neg')
 return(cm)
 }
 
@@ -405,21 +508,80 @@ get_evalmetrics <- function(cm, model, n_preds)
 ```
 
 ```{r eval_fmodel}
-
+co_values <- seq(0.1, 0.9, length=50)
+eval_df <- data.frame(matrix(0, nrow=length(co_values), ncol=8))
+colnames(eval_df) <- c('Cutoff', 'Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy')
 fm.y_prob <- predict.glm(full_model, newdata=data, type=c("response"))
-tmp_cm <- get_cm(fm.y_prob, full_model, 0.5, data$default_r)
-tmp_metrics <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
-tmp_cm
-tmp_metrics
+
+# Collect metrics for all cutoff values
+for(i in 1:length(co_values))
+{
+  co <- co_values[i]
+  tmp_cm <- get_cm(fm.y_prob, full_model, co, data$default_r)
+  tmp_metrics <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
+  eval_df[i,] <- c(co, tmp_metrics)
+}
+# colnames(tmp_cm) <- c('Act.Pos', 'Act.Neg')
+# tmp_metrics
+# eval_df
+```
+```{r viz_prec_rec, fig.height=5, fig.width=11}
+prec_recall <- ggplot() +
+               geom_line(data=eval_df, aes(x=Cutoff, y=Precision, color='blue'), lwd=1.2) +
+               geom_line(data=eval_df, aes(x=Cutoff, y=Recall, color='red'), lwd=1.2) +
+               xlab('Cutoff value') +
+               ylab('Precision/Recall') +
+               # labels(c('Precision', 'Recall')) +
+               ggtitle('Precision/Recall at different cutoff thresholds' )
+
+sens_spec <- ggplot() +
+             geom_line(data=eval_df, aes(x=Cutoff, y=Sensitivity, color='blue'), lwd=1.2) +
+             geom_line(data=eval_df, aes(x=Cutoff, y=Specificity, color='red'), lwd=1.2) +
+             xlab('Cutoff value') +
+             ylab('Sensitivity/Specificity') +
+             # labels(c('Precision', 'Recall')) +
+             ggtitle('Sensitivity/Specificity at different cutoff thresholds' )
+
+grid.arrange(prec_recall, sens_spec, nrow=1)
 ```
 
 ```{r exp_coeff}
 exp_coeff <- exp(full_model$coefficients)
 exp_coeff
 ```
-Based on the intercept value `r exp_coeff[["(Intercept)"]]` a person is less likely to default on average.  
 
+**Interpretation on exponentiated coefficients**
 
+Wish to include only those that affect the default rate substantially. Here coefficients above 1 represents the increased chance of defaulting where coefficient value itself represent by what factor it increases as the unit of the variable increases.  
+
+Intercept - The intercept value `r exp_coeff[["(Intercept)"]]` means a person is less likely to default on average.  
+
+credit_limit - The chances of defaulting decreases by `r (1-exp_coeff[["credit_limit"]])*100`% for one unit of increase in credit limit  
+
+genderFemale - The chances of defaulting decreases by `r (1-exp_coeff[["genderFemale"]])*100`% when the applicant is female.  
+
+educationHigh School - The odds-ratio (defaulting to not defaulting) increases by a factor of `r exp_coeff[["educationHigh School"]]` when the applicant holds a High School qualification and the chances are substantial compared to those with other qualifications.  
+
+maritalMarried - The odds-ratio improves by a factor of `r exp_coeff[["maritalMarried"]]` when the applicant is Married and is higher compared to those with other Marital status.  
+
+age - For every increase in the unit, the odds ratio improve by a factor of `r exp_coeff[["age"]]`.  
+
+Commenting on the repayment status coefficient. Compared to all months, defaulting on `September` month appears to increase the odds-ratio by a factor of `r exp_coeff[["rs_sep-1"]]`.  
+
+Commenting on the amount paid coefficients. I normally do not average coefficients as it is generally considered an incorrect pracise. However, `ap` coefficients are almost same with slight variation. Hence in order to make a conclusion, I wish to average to mention by what factor on average paying bills every month affect the odds-ratio. The odds-ratio decreases by 
+`r (1-mean(exp_coeff[c("ap_sep", "ap_aug", "ap_july", "ap_june", "ap_may", "ap_apr")]))*100`% by bills monthly.  
+
+**Conclusions and revisions to SMART questions from Logit model**
+
+1. University qualification holders have higher chances of making default on credit card bill. While this may not be intuitive, looking from a different perspective may provide further information. My understanding of such would be, even those with better qualification struggle to find a good job in Taiwan.  
+
+2. Contrary to our findings from EDA, females are less likely than males to default on their credit card bill. 
+
+3. Increase in age means more chances of defaulting. Conforming to my previous hypothesis, it is my understanding from the results that there is a job crisis in Taiwan that may be a latent factor. (China News)[https://www.taiwannews.com.tw/en/news/339690]  
+
+4. Yes, being married improves the chances of defaulting and it makes sense. Having said there is a job crisis, and perhaps an unreliable source of income, to handle the family requirements married people do default on their bill.  
+
+Overall, my understanding from the EDA and the results conveyed by the Logit model is that the cause for all financial crisis in the country was caused by inadequate job openings to match the ever growing population. In order to reduce the financial risk of the banks, and to restore the overall financial health of the country, it would be imperative to consider measures that boost country's economy and at the same time create more job opportunities for everyone.  
 
 
 
