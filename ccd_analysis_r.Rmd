@@ -2,7 +2,16 @@
 title: "Credit Card Default Analysis and Prediction"
 author: "Rajkumar Conjeevaram Mohan"
 date: "29/04/2022"
-output: html_document
+output:
+  html_document:
+    code_folding: hide
+    number_sections: true
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
 ---
 
 ```{r setup, include=FALSE}
@@ -28,7 +37,7 @@ data[data$marital == 3, 'marital'] <- 'Others'
 marital.levels <- c("Single", "Married", "Others")
 data$marital <- factor(data$marital, levels = marital.levels)
 
-data[data$education >= 4, 'education'] <- 4
+data[data$education >= 4 | data$education ==0, 'education'] <- 4
 # Education (1 = graduate school; 2 = university; 3 = high school; 4 = others)
 data[data$education==1, 'education'] <- 'Graduate School'
 data[data$education==2, 'education'] <- 'University'
@@ -56,18 +65,29 @@ data$default_r <- factor(data$default_r, levels=default_levels)
 
 ```
 
+# Introduction
 
-# Data Description
+Since the beginning in 1990, Taiwan banks, in order to improve their financial market and expand their profit, started lending money to real estate businesses. When real estate businesses started saturating, they decided to focus on credit card businesses and started issuing cards to many individuals regardless of their repayment capacity. One of their primary targets was school going young students, who were easily exploited given their lack of knowledge in finance and other risks involved. As per Taiwanese Department of Health report, the suicide rate was increased to $22.9%$ in 2006 compared to 2005 mainly due to debt concerns. Many lost their homes, some resorted to illegal engagement for repayment, all caused by their inability to repay the debt. In 2006, the debt from credit card and cash card reached about $\$268$ billion USD and caused a financial crisis that blew the consumer finance confidence. In order to control the situation and prevent cards from being further issued to ineligible consumers, Financial Department of Taiwanese government issued regulation notice to banks increasing the income and other criteria to apply for credit card.  
+
+Several financial firms around the globe are taking stringent measures to prevent credit card default by using credit history and other payment patterns using Machine Learning models that help in predicting a potential client who possibly will default on their bill. In order to further understand what factors constitute to default behavior and by what factor the chances to default increase, I wish to use Exploratory Data Analysis along with hypothesis test answer some of the preconceived opinions, and use ML models such as Logistic Regression, Decision Tree, Random Forest, Extremely Randomized Forest for predicting client who may default.  
+
+# SMART Questions
+
+1. 
+
+# Data
+
+## Description
 ```{r}
 str(data)
 ```
 
-# Data overview
+## Overview
 ```{r, results='markup'}
 rmarkdown::paged_table(data)
 ```
 
-# Default distribution
+## Distribution of Imbalanced data
 ```{r, fig.height=5, fig.width=12}
 hist.default <- ggplot(data, aes(x=default_r)) + 
                 geom_bar() +
@@ -80,15 +100,12 @@ bxpt.default <- ggplot(data, aes(x=default_r, y=credit_limit)) +
 grid.arrange(hist.default, bxpt.default, nrow=1)
 ```
 
-# SMOTE
-
-```{r}
+```{r smote}
 data <- SMOTE(default_r~., data=data, perc.over=280)
 ```
 
 ## Distribution post SMOTE
 
-# Default distribution
 ```{r, fig.height=5, fig.width=12}
 hist.default <- ggplot(data, aes(x=default_r)) + 
                 geom_bar() +
@@ -107,8 +124,6 @@ ttest.credit_limit <- t.test(data[data$default_r=="Yes", 'credit_limit'],
 ttest.credit_limit
 
 ```
-
-# Distribution
 
 ## Age and Default
 
@@ -140,12 +155,12 @@ The `t.test` on age between those defaulted on their credit card bills and those
 # happens
 data$age_group = 0
 data[data$age <= 35, "age_group"] <- "Young"
-data[data$age >35 & data$age <= 50, "age_group"] <- "Professionals"
-data[data$age >50 & data$age < 66, "age_group"] <- "Old"
-data[data$age >= 66, "age_group"] <- "Retired"
+data[data$age >35 & data$age <= 50, "age_group"] <- "Young Adults"
+data[data$age >50 & data$age < 66, "age_group"] <- "Mid-age Adults"
+data[data$age >= 66, "age_group"] <- "Seniors"
 
-data$age_group <- factor(data$age_group, levels=c("Young", "Professionals", 
-                                                  "Old", "Retired"))
+data$age_group <- factor(data$age_group, levels=c("Young", "Young Adults", 
+                                                  "Mid-age Adults", "Seniors"))
 
 age_group_default_cont <- table(data$default_r, data$age_group)
 chisq.age_default <- chisq.test(age_group_default_cont)
@@ -221,8 +236,65 @@ hist.gender_default <- ggplot(gender_default_cont, aes(x=Gender, y=Freq, fill=De
 hist.gender_default
 chisq.gender_default
 ```
+```{r rs_june, fig.height=15, fig.width=8}
 
-```{r due}
+sep_df <- ggplot(data[data$default_r=='Yes',], aes(x=rs_sep, y=)) + 
+          geom_bar(aes(y = (..count..)/sum(..count..))) + ylab('Density') +
+          ylim(c(0, 0.65)) +
+           ggtitle('Sep Default RP')
+
+sep_ndf <- ggplot(data[data$default_r=='No',], aes(x=rs_sep)) + ylab('Density') +
+           geom_bar(aes(y = (..count..)/sum(..count..))) + 
+            ylim(c(0, 0.65)) +
+            ggtitle('Sep Non-Default RP')
+
+aug_df <- ggplot(data[data$default_r=='Yes',], aes(x=rs_aug)) + ylab('Density') +
+           geom_bar(aes(y = (..count..)/sum(..count..))) + 
+           ylim(c(0, 0.65)) + ggtitle('Aug Default RP')
+
+aug_ndf <- ggplot(data[data$default_r=='No',], aes(x=rs_aug)) + ylab('Density') +
+           geom_bar(aes(y = (..count..)/sum(..count..))) +  
+           ylim(c(0, 0.65)) + ggtitle('Aug Non-Default RP')
+
+july_df <- ggplot(data[data$default_r=='Yes',], aes(x=rs_july)) + ylab('Density') +
+           geom_bar(aes(y = (..count..)/sum(..count..))) + 
+           ylim(c(0, 0.65)) + ggtitle('July Default RP')
+
+july_ndf <- ggplot(data[data$default_r=='No',], aes(x=rs_july)) + ylab('Density') +
+            geom_bar(aes(y = (..count..)/sum(..count..))) + 
+           ylim(c(0, 0.65)) +  ggtitle('July Non-Default RP')
+
+june_df <- ggplot(data[data$default_r=='Yes',], aes(x=rs_june)) + ylab('Density') +
+           geom_bar(aes(y = (..count..)/sum(..count..))) +  
+           ylim(c(0, 0.65)) + ggtitle('June Default RP')
+
+june_ndf <- ggplot(data[data$default_r=='No',], aes(x=rs_june)) + ylab('Density') +
+            geom_bar(aes(y = (..count..)/sum(..count..))) +  
+            ylim(c(0, 0.65)) + ggtitle('June Non-Default RP')
+
+may_df <- ggplot(data[data$default_r=='Yes',], aes(x=rs_may)) + ylab('Density') +
+          geom_bar(aes(y = (..count..)/sum(..count..))) +  
+          ylim(c(0, 0.65)) + ggtitle('May Default RP')
+
+may_ndf <- ggplot(data[data$default_r=='No',], aes(x=rs_may)) + ylab('Density') +
+           geom_bar(aes(y = (..count..)/sum(..count..))) +  
+           ylim(c(0, 0.65)) + ggtitle('May Non-Default RP')
+
+april_df <- ggplot(data[data$default_r=='Yes',], aes(x=rs_apr)) + ylab('Density') +
+            geom_bar(aes(y = (..count..)/sum(..count..))) +  
+            ylim(c(0, 0.65)) + ggtitle('April Default RP')
+
+april_ndf <- ggplot(data[data$default_r=='No',], aes(x=rs_apr)) + ylab('Density') +
+             geom_bar(aes(y = (..count..)/sum(..count..))) + 
+             ylim(c(0, 0.65)) + ggtitle('April Non-Default RP')
+
+grid.arrange(april_df, april_ndf, may_df, may_ndf, june_df, june_ndf, 
+             july_df, july_ndf, aug_df, aug_ndf, sep_df, sep_ndf, nrow=6, ncol=2 )
+
+```
+
+
+```{r due, results='markup'}
 library(dplyr)
 ag_due_summary <-  data %>% 
                    dplyr::group_by(age_group) %>% 
@@ -234,19 +306,119 @@ ag_due_summary <- data.frame(ag_due_summary)
 ag_due_summary$due <- ag_due_summary$total_bill - ag_due_summary$total_paid
 ag_due_summary$due_percent <- (ag_due_summary$due/ag_due_summary$credit_limit) * 100
 
+rmarkdown::paged_table(ag_due_summary)
+
 med_due <- round(ag_due_summary$due_percent)
 age_labels <- ag_due_summary$age_group
 lbls <- paste(age_labels, ' ', med_due, '%')
 pie(med_due, labels=lbls, col=rainbow(length(lbls)), main="Median Due by age groups")
 
-rmarkdown::paged_table(ag_due_summary)
+
+```
+```{r}
+getproportion <- function(x)
+{
+  ul <- unique(x)
+  count <- NULL
+  for(e in ul) # Hoping it produces in the same order as stored in ul
+  {
+    count <- c(count, sum(x==e))
+  }
+  count <- (count/sum(count)) * 100
+  return(count)
+  # m_c <- max(count, na.rm=T)
+  # m_i <- which(count == m_c)
+  # return(ul[m_i])
+}
+```
+
+```{r}
+
+education.young <- getproportion(data[data$age_group=='Young', 'education'])
+education.young_adults <- getproportion(data[data$age_group=='Young Adults', 'education'])
+education.midage_adults <- getproportion(data[data$age_group=='Mid-age Adults', 'education'])
+education.seniors <- getproportion(data[data$age_group=='Seniors', 'education'])
+
+young.educ_perc <- round(education.young)
+young_adults.educ_perc <- round(education.young_adults)
+midage_adults.educ_perc <- round(education.midage_adults)
+seniors.educ_perc <- round(education.seniors)
+
+# Young
+lbls <- paste(education.levels, ' ', young.educ_perc, '%')
+pie(young.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Young")
+
+# Young Adults
+lbls <- paste(education.levels, ' ', young_adults.educ_perc, '%')
+pie(young.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Young Adults")
+
+# Mid-age Adults
+lbls <- paste(education.levels, ' ', midage_adults.educ_perc, '%')
+pie(midage_adults.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Mid-age adults")
+
+# Seniors
+lbls <- paste(education.levels, ' ', seniors.educ_perc, '%')
+pie(seniors.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Seniors")
 ```
 
 # Modeling
 
 ```{r}
+full_model <- glm('default_r~.-id-age_group', data=data, family='binomial')
+# full_model
+summary(full_model)
+```
+
+```{r metrics_fn}
+
+get_cm <- function(predictions, model, co, g_truth)
+{
+  # pred.list <- round(predictions) # for now
+  pred.list <- predictions
+  pred.list[predictions <= co] <- 1
+  pred.list[predictions > co] <- 2
+  cm <- matrix(0, nrow=2, ncol=2)
+  for(i in 1:length(pred.list))
+  {
+    actual <- g_truth[i]
+    pred <- pred.list[i]
+    cm[pred, actual] <- cm[pred, actual] + 1
+  }
+  colnames(cm) <- c('Act.Pos', 'Act.Neg')
+return(cm)
+}
+
+get_evalmetrics <- function(cm, model, n_preds)
+{
+  precision <- cm[1, 1]/(cm[1, 1] + cm[1, 2])
+  recall <- cm[1, 1]/(cm[1, 1] + cm[2, 1])
+  sensitivity <- recall
+  specificity <- cm[2, 2]/(cm[2, 2] + cm[1, 2])
+  f1 <- 2 * ((precision * recall)/(precision + recall))
+  mcfadden <- 1 - model$deviance/model$null.deviance
+  accuracy <- (cm[1, 1] + cm[2, 2])/n_preds
+  metrics <- c(precision, recall, sensitivity, specificity, f1, mcfadden, accuracy)
+  
+  return(metrics)
+}
 
 ```
+
+```{r eval_fmodel}
+
+fm.y_prob <- predict.glm(full_model, newdata=data, type=c("response"))
+tmp_cm <- get_cm(fm.y_prob, full_model, 0.5, data$default_r)
+tmp_metrics <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
+tmp_cm
+tmp_metrics
+```
+
+```{r exp_coeff}
+exp_coeff <- exp(full_model$coefficients)
+exp_coeff
+```
+Based on the intercept value `r exp_coeff[["(Intercept)"]]` a person is less likely to default on average.  
+
 
 
 
