@@ -120,7 +120,7 @@ data <- SMOTE(default_r~., data=data, perc.over=280)
 hist.default <- ggplot(data, aes(x=default_r)) + 
                 geom_bar() +
                 xlab('Credit Card Default') +
-                ggtitle('Imbalanced distribution of response variable')  
+                ggtitle('Distribution of response variable post SMOTE')  
 bxpt.default <- ggplot(data, aes(x=default_r, y=credit_limit)) +
                 geom_boxplot(outlier.color = 'red', outlier.shape = 8, fill='gray') +
                 stat_boxplot(geom='errorbar', width=0.5) + xlab('Default')
@@ -367,9 +367,9 @@ The values in the table represent the median value.
 library(dplyr)
 ag_due_summary <-  data %>% 
                    dplyr::group_by(age_group) %>% 
-                   dplyr::summarize(total_bill = median(bs_sep + bs_aug + bs_july + bs_june + bs_may + bs_apr),
-                                    total_paid = median(ap_sep + ap_aug + ap_july + ap_june + ap_may + ap_apr),
-                                    credit_limit = median(credit_limit))
+                   dplyr::summarize(total_bill = mean(bs_sep + bs_aug + bs_july + bs_june + bs_may + bs_apr),
+                                    total_paid = mean(ap_sep + ap_aug + ap_july + ap_june + ap_may + ap_apr),
+                                    credit_limit = mean(credit_limit))
 
 ag_due_summary <- data.frame(ag_due_summary)
 ag_due_summary$due <- ag_due_summary$total_bill - ag_due_summary$total_paid
@@ -377,9 +377,11 @@ ag_due_summary$due_percent <- (ag_due_summary$due/ag_due_summary$credit_limit) *
 
 rmarkdown::paged_table(ag_due_summary)
 
+due_norm <- round((ag_due_summary$due/sum(ag_due_summary$due)), 2)*100
+
 med_due <- round(ag_due_summary$due_percent)
 age_labels <- ag_due_summary$age_group
-lbls <- paste(age_labels, ' ', med_due, '%')
+lbls <- paste(age_labels, ' ', due_norm, '%')
 pie(med_due, labels=lbls, col=rainbow(length(lbls)), main="Median Due by age groups")
 
 
@@ -542,21 +544,21 @@ sens_spec <- ggplot() +
              # labels(c('Precision', 'Recall')) +
              ggtitle('Sensitivity/Specificity at different cutoff thresholds' )
 
-grid.arrange(prec_recall, sens_spec, nrow=1)
+# grid.arrange(prec_recall, sens_spec, nrow=1)
 ```
 
-```{r exp_coeff}
+```{r}
 exp_coeff <- exp(full_model$coefficients)
 exp_coeff
 ```
 
 **Interpretation on exponentiated coefficients**
 
-Wish to include only those that affect the default rate substantially. Here coefficients above 1 represents the increased chance of defaulting where coefficient value itself represent by what factor it increases as the unit of the variable increases.  
+Wish to include only those that affect the default rate substantially. Here coefficients above 1 represents the factor by which odds-ratio is increased (defaulting to non-defaulting) as the unit of the variable increases.  
 
 Intercept - The intercept value `r exp_coeff[["(Intercept)"]]` means a person is less likely to default on average.  
 
-credit_limit - The chances of defaulting decreases by `r (1-exp_coeff[["credit_limit"]])*100`% for one unit of increase in credit limit  
+credit_limit - The chances of defaulting decreases by `r (1-exp_coeff[["credit_limit"]])*100`% for one unit of increase in credit limit. From this it can be inferred that people who typically default have lesser credit limit.  
 
 genderFemale - The chances of defaulting decreases by `r (1-exp_coeff[["genderFemale"]])*100`% when the applicant is female.  
 
@@ -573,7 +575,7 @@ Commenting on the amount paid coefficients. I normally do not average coefficien
 
 **Conclusions and revisions to SMART questions from Logit model**
 
-1. University qualification holders have higher chances of making default on credit card bill. While this may not be intuitive, looking from a different perspective may provide further information. My understanding of such would be, even those with better qualification struggle to find a good job in Taiwan.  
+1. High School qualification holders have higher chances of making default on credit card bill. While this may not be intuitive, looking from a different perspective may provide further information. My understanding of such would be, even those with better qualification struggle to find a good job in Taiwan.  
 
 2. Contrary to our findings from EDA, females are less likely than males to default on their credit card bill. 
 
@@ -681,6 +683,8 @@ ggtitle('Sensitivity/Specificity of KNN')
 
 The specificity is really worse with KNN than was with Logit model for some reason and I wish not to proceed further with this model. Perhaps this is because logit model was trained with full data rather than training set itself. Specificity is one of the important metrics particularly for this domain as specificity refers to the recall rate of the negative class and the negative class is those who default. Predicting poorly on those who default would cause risk to the financial health of the bank.  
 
+## GLM Second Attempt
+
 ```{r}
 
 trainIndex <- createDataPartition(data$default_r, p=.8,
@@ -693,10 +697,30 @@ full_model <- glm('default_r~.-id-age_group', data=train_set, family='binomial')
 
 ```
 
+```{r calculate_amt_risk}
+
+get_risky_amt <- function(cm, t_data)
+{
+  FN <- cm[1, 2]
+  # Exactly picking those mislcassified observations 
+  # and doing an average is not probably a good idea since 
+  # depending on the subset the there will be variation in prediction. 
+  # Hence an average balance from a sample of misclassification size
+  # would be adequate
+  test_subset_indices <- sample(nrow(t_data), FN, replace=F)
+  test_subset <- t_data[test_subset_indices,]
+  total_bill <- colSums(test_subset[, 13:18])
+  total_paid <- colSums(test_subset[, 19:24])
+  avg_due_person <- sum(total_bill - total_paid) # average due per person
+  return(avg_due_person)
+}
+
+```
+
 ```{r}
 co_values <- seq(0.1, 0.9, length=50)
-eval_df <- data.frame(matrix(0, nrow=length(co_values), ncol=8))
-colnames(eval_df) <- c('Cutoff', 'Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy')
+eval_df <- data.frame(matrix(0, nrow=length(co_values), ncol=9))
+colnames(eval_df) <- c('Cutoff', 'Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy', 'Risk')
 fm.y_prob <- predict.glm(full_model, newdata=test_set, type=c("response"))
 
 # Collect metrics for all cutoff values
@@ -704,8 +728,9 @@ for(i in 1:length(co_values))
 {
   co <- co_values[i]
   tmp_cm <- get_cm(fm.y_prob, full_model, co, test_set$default_r)
+  risky_amt <- get_risky_amt(tmp_cm, test_set)
   tmp_metrics <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
-  eval_df[i,] <- c(co, tmp_metrics)
+  eval_df[i,] <- c(c(co, tmp_metrics), risky_amt)
 }
 # colnames(tmp_cm) <- c('Act.Pos', 'Act.Neg')
 # tmp_metrics
@@ -716,17 +741,35 @@ for(i in 1:length(co_values))
 prec_recall.molten <- melt(eval_df[, c("Cutoff", "Precision", "Recall")], id=c("Cutoff"))
 sens_spec.molten <- melt(eval_df[, c("Cutoff", "Sensitivity", "Specificity")], id=c("Cutoff"))
 
-prec_recall.plot <- ggplot(prec_recall.molten, aes(x=Cutoff, y=value, color=variable)) + 
-                    geom_line() +
+prec_recall.plot <- ggplot(prec_recall.molten, aes(x=Cutoff, y=value, color=variable )) + 
+                    geom_line(lwd=1) +
                     ggtitle('Precision Recall')
 sens_spec.plot <- ggplot(sens_spec.molten, aes(x=Cutoff, y=value, color=variable)) + 
-                  geom_line() +
+                  geom_line(lwd=1) +
                     ggtitle('Sensitivity Specificity')
 
 grid.arrange(prec_recall.plot, sens_spec.plot, nrow=1)
 ```
 
-The above results are for the test set and it is better compared to KNN. Confusion matrix for the cutoff value that shows intersecting Sensitivity and Specificity would be:  
+The above results are for the test set and it is better compared to KNN. 
+
+```{r, fig.width=12, fig.height=5}
+
+risk_plot <- ggplot(eval_df, aes(x=Cutoff, y=Risk, color=Risk)) +
+             geom_line(lwd=1) +
+             geom_vline(xintercept=0.3775510, color='red', linetype='dashed') + 
+             ylab('Average credit card bill due') +
+             ggtitle('Amount risked for misclassification')
+
+grid.arrange(sens_spec.plot + 
+               geom_vline(xintercept=0.3775510, color='red', linetype='dashed'), 
+             risk_plot, nrow=1)
+
+```
+
+The dashed vertical in red color represents the optimal cutoff threshold.  
+
+Confusion matrix for the cutoff value that shows intersecting Sensitivity and Specificity would be:  
 
 ```{r}
 tmp_cm <- get_cm(fm.y_prob, full_model, 0.3775510, test_set$default_r) # cutoff value = 0.3775510
@@ -737,6 +780,10 @@ tmp_metrics <- data.frame(matrix(0, nrow=1, ncol=7))
 colnames(tmp_metrics) <- c('Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy')
 tmp_metrics[1,] <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
 tmp_metrics
+```
+
+```{r}
+rmarkdown::paged_table(data.frame(t(tmp_metrics)))
 ```
 
 ```{r}
@@ -753,6 +800,85 @@ For this model, $0.3775510$ would be the optimal cut-off value since it gives a 
 
 
 
+## Conclusions from predictions 
+
+```{r}
+# I am doing head here since they will transfer the factor level information
+newdata <- head(test_set[test_set$default_r=='No',], 1)
+newdata$gender <- 'Male'
+newdata$education <- 'High School'
+newdata$marital <- 'Single'
+newdata$age <- 23
+newdata[1, seq(13, 18, length=6)] <- colMeans(test_set[test_set$default_r=='No', seq(13, 18, length=6)])
+newdata[1, 19:24] <- colMeans(test_set[test_set$default_r=='No', 19:24])
+hyp_res <- predict.glm(full_model, newdata, type='response')
+hyp_res
+```
+
+```{r}
+newdata2 <- newdata
+newdata2$rs_sep <- factor(2)
+hyp_res <- predict.glm(full_model, newdata2, type='response')
+hyp_res
+```
+
+A sample was taken from those who do not default and I only changed the repayment status of the last month to 2 (2 months due) and the model predicted that there is a high chances of this person making a default.  This confirms one of our previous statements how important rs_sep is in the model.  
+
+```{r}
+newdata3 <- newdata
+newdata$gener <- 'Female'
+hyp_res <- predict.glm(full_model, newdata3, type='response')
+hyp_res
+```
+
+```{r}
+newdata4 <- newdata
+newdata4$age <- 34
+newdata4$education <- 'University'
+hyp_res <- predict.glm(full_model, newdata4, type='response')
+hyp_res
+```
+
+My conclusion regarding who default the most was once again confirmed by the decrease in the probability when I switched from education from High School to University.  
+
+## Decision Tree
+
+```{r}
+
+library(rpart)
+library(rattle)
+tree_cnames <- colnames(train_set)[is.na(pmatch(colnames(train_set), c("id", "age_group")))]
+#[, colnames(train_set)[is.na(pmatch(colnames(train_set), c("id", "age_group")))]]
+#credit_limit+gender+education+marital+age+rs_sep+rs_aug+rs_july+rs_june+rs_may+rs_apr+
+                  # bs_sep+bs_aug+bs_july+bs_june+bs_may+bs_apr+ap_sep+ap_aug+ap_july+ap_june+ap_may+ap_apr
+# rs_sep+rs_aug+rs_july+rs_june+rs_may+rs_apr+bs_sep+ap_sep+age
+
+weights <- rep(0, nrow(train_set))
+weights[train_set$default_r=='Yes'] <- 0.63
+weights[train_set$default_r=='No'] <- 0.37
+
+# weights <- ifelse(train_set$default_r == 'No', negativeWeight, positiveWeight)
+
+dt_fit <- rpart(default_r~., data=train_set[, tree_cnames], method="class", weights=weights)
+fancyRpartPlot(dt_fit)
+```
+
+
+```{r eval_dt}
+dt_cm = confusionMatrix( predict(dt_fit, newdata=test_set[, tree_cnames], type = "class"), reference = test_set$default_r )
+print('Overall: ')
+dt_cm$overall
+print('Class: ')
+dt_cm$byClass
+```
+
+```{r}
+rmarkdown::paged_table(data.frame(dt_cm$byClass))
+```
+
+```{r}
+dt_cm
+```
 
 
 
