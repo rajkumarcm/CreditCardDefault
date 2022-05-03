@@ -637,8 +637,8 @@ get_cm2 = function(pred.list, g_truth)
 ```
 
 ```{r}
-
-trainIndex <- createDataPartition(data$default_r, p=.67,
+library(FNN)
+trainIndex <- createDataPartition(data$default_r, p=.8,
                                   list = FALSE,
                                   times = 1)
 c_indices <- c(2, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24)
@@ -679,12 +679,77 @@ ggplot(molten.sens_spec, aes(x=K, y=value, color=variable)) + geom_line() +
 ggtitle('Sensitivity/Specificity of KNN')
 ```
 
-The specificity is really worse with KNN than was with Logit model for some reason and I wish not to proceed further with this model. Specificity is one of the important metrics particularly for this domain as specificity refers to the recall rate of the negative class and the negative class is those who default. Predicting poorly on those who default would cause risk to the financial health of the bank.  
+The specificity is really worse with KNN than was with Logit model for some reason and I wish not to proceed further with this model. Perhaps this is because logit model was trained with full data rather than training set itself. Specificity is one of the important metrics particularly for this domain as specificity refers to the recall rate of the negative class and the negative class is those who default. Predicting poorly on those who default would cause risk to the financial health of the bank.  
 
 ```{r}
 
+trainIndex <- createDataPartition(data$default_r, p=.8,
+                                  list = FALSE,
+                                  times = 1)
+train_set <- data[trainIndex,]
+test_set <- data[-trainIndex,]
+
+full_model <- glm('default_r~.-id-age_group', data=train_set, family='binomial')
+
 ```
 
+```{r}
+co_values <- seq(0.1, 0.9, length=50)
+eval_df <- data.frame(matrix(0, nrow=length(co_values), ncol=8))
+colnames(eval_df) <- c('Cutoff', 'Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy')
+fm.y_prob <- predict.glm(full_model, newdata=test_set, type=c("response"))
+
+# Collect metrics for all cutoff values
+for(i in 1:length(co_values))
+{
+  co <- co_values[i]
+  tmp_cm <- get_cm(fm.y_prob, full_model, co, test_set$default_r)
+  tmp_metrics <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
+  eval_df[i,] <- c(co, tmp_metrics)
+}
+# colnames(tmp_cm) <- c('Act.Pos', 'Act.Neg')
+# tmp_metrics
+# eval_df
+```
+
+```{r fig.height=5, fig.width=11}
+prec_recall.molten <- melt(eval_df[, c("Cutoff", "Precision", "Recall")], id=c("Cutoff"))
+sens_spec.molten <- melt(eval_df[, c("Cutoff", "Sensitivity", "Specificity")], id=c("Cutoff"))
+
+prec_recall.plot <- ggplot(prec_recall.molten, aes(x=Cutoff, y=value, color=variable)) + 
+                    geom_line() +
+                    ggtitle('Precision Recall')
+sens_spec.plot <- ggplot(sens_spec.molten, aes(x=Cutoff, y=value, color=variable)) + 
+                  geom_line() +
+                    ggtitle('Sensitivity Specificity')
+
+grid.arrange(prec_recall.plot, sens_spec.plot, nrow=1)
+```
+
+The above results are for the test set and it is better compared to KNN. Confusion matrix for the cutoff value that shows intersecting Sensitivity and Specificity would be:  
+
+```{r}
+tmp_cm <- get_cm(fm.y_prob, full_model, 0.3775510, test_set$default_r) # cutoff value = 0.3775510
+row.names(tmp_cm) <- c("Pred No", "Pred Yes")
+colnames(tmp_cm) <- c("Actual No", "Actual Yes")
+tmp_cm
+tmp_metrics <- data.frame(matrix(0, nrow=1, ncol=7))
+colnames(tmp_metrics) <- c('Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy')
+tmp_metrics[1,] <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
+tmp_metrics
+```
+
+```{r}
+library(pROC)
+
+roc(test_lbls, fm.y_prob,
+            smoothed = TRUE,
+            plot=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+
+For this model, $0.3775510$ would be the optimal cut-off value since it gives a good balance between both Sensitivity and Specificity. A question may naturally come in mind why not select a slightly lower cut-off value that would result in even better Specificity (recall of defaulter class). The answer to that is, although it may result in better default prediction, it may also result in losing potential clients by classifying those who would not default as high chance of defaulting. This means, such a mis-classification may lead to reduced credit limit assigned to potential clients that may make them explore other banks. Hence, a good balance of Sensitivity and Specificity at approximately 75% accuracy appears a good fit. Also the AUC is above the mark.  
 
 
 
