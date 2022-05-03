@@ -424,12 +424,12 @@ pie(young.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education lev
 
 # Mid-age Adults
 lbls <- paste(education.levels, ' ', midage_adults.educ_perc, '%')
-pie.midage <- pie(midage_adults.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Mid-age adults")
+pie(midage_adults.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Mid-age adults")
 
 # Seniors
 lbls <- paste(education.levels, ' ', seniors.educ_perc, '%')
-pie.seniors <- pie(seniors.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Seniors")
-grid.arrange(pie.midage, pie.seniors, nrow=1)
+pie(seniors.educ_perc, labels=lbls, col=rainbow(length(lbls)), main="Education level of Seniors")
+
 ```
 
 # Modeling
@@ -464,13 +464,13 @@ summary(full_model)
 ```
 
 ```{r leaps}
-library("leaps")
-data.renamed <- data
-cnames <- colnames(data.renamed)
-cnames[which(cnames == 'default_r')] <- 'y'
-colnames(data.renamed) <- cnames
-reg.leaps <- regsubsets(y~., data = data.renamed, nbest = 1, method = "exhaustive", really.big = T)  # leaps,
-plot(reg.leaps, scale = "adjr2", main = "Adjusted R^2")
+# library("leaps")
+# data.renamed <- data
+# cnames <- colnames(data.renamed)
+# cnames[which(cnames == 'default_r')] <- 'y'
+# colnames(data.renamed) <- cnames
+# reg.leaps <- regsubsets(y~., data = data.renamed, nbest = 1, method = "exhaustive", really.big = T)  # leaps,
+# plot(reg.leaps, scale = "adjr2", main = "Adjusted R^2")
 ```
 
 ```{r metrics_fn}
@@ -583,14 +583,107 @@ Commenting on the amount paid coefficients. I normally do not average coefficien
 
 Overall, my understanding from the EDA and the results conveyed by the Logit model is that the cause for all financial crisis in the country was caused by inadequate job openings to match the ever growing population. In order to reduce the financial risk of the banks, and to restore the overall financial health of the country, it would be imperative to consider measures that boost country's economy and at the same time create more job opportunities for everyone.  
 
+I have used full logit model primarily to see what variable affect the chances of defaulting and by what factor. For serious prective modeling, I wish to explore the performance of other Machine Learning models.  
 
+## Data Partitioning  
 
+```{r}
 
+# Split into train, test set by 2:1
 
+library(caret)
 
+set.seed(1234)
+trainIndex <- createDataPartition(data$default_r, p=.67,
+                                  list = FALSE,
+                                  times = 1)
+train_set <- data[trainIndex,]
+test_set <- data[-trainIndex,]
 
+```
 
+## KNN
 
+```{r }
+
+#---------- Cross validation
+
+# define training control
+train_control <- trainControl(method = "cv", number = 5)
+
+# train the model on training set
+model <- train(default_r ~.-id-age_group,
+               data = train_set,
+               tuneGrid   = expand.grid(k = 1:10),
+               trControl = train_control,
+               method = "knn",
+               metric='Accuracy')
+
+# print cv scores
+summary(model)
+```
+```{r}
+get_cm2 = function(pred.list, g_truth)
+{
+  cm <- matrix(0, nrow=2, ncol=2)
+  for(i in 1:length(pred.list))
+  {
+    actual <- g_truth[i]
+    pred <- pred.list[i]
+    cm[pred, actual] <- cm[pred, actual] + 1
+  }
+  return(cm)
+}
+```
+
+```{r}
+
+trainIndex <- createDataPartition(data$default_r, p=.67,
+                                  list = FALSE,
+                                  times = 1)
+c_indices <- c(2, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24)
+
+train_lbls <- data[trainIndex, 'default_r']
+test_lbls <- data[-trainIndex, 'default_r']
+train_set <- data[trainIndex, c_indices]
+test_set <- data[-trainIndex, c_indices]
+
+train_set <- scale(train_set, center=T, scale=T)
+test_set <- scale(test_set, center=T, scale=T)
+
+k_vals <- seq(5, 30, by=2)
+k_performance <- data.frame(matrix(0, nrow=length(k_vals), ncol=8))
+colnames(k_performance) <- c('K', 'Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy')
+
+for(i in 1:length(k_vals))
+{
+  k <- k_vals[i]
+  knn_pred <- knn(train=train_set, test=test_set, cl=train_lbls, k=k)
+  knn_pred <- as.numeric(knn_pred[1:nrow(test_set)])
+  tmp_cm <- get_cm2(knn_pred, test_lbls)
+  # tmp_cm
+  tmp_metrics <- get_evalmetrics(tmp_cm, full_model, length(knn_pred))
+  # tmp_metrics
+  k_performance[i,] <- c(k, tmp_metrics)
+}
+```
+
+```{r}
+k_performance
+```
+
+```{r}
+library(reshape2)
+molten.sens_spec <- melt(k_performance[, c("K", "Sensitivity", "Specificity")], id=c("K"))
+ggplot(molten.sens_spec, aes(x=K, y=value, color=variable)) + geom_line() +
+ggtitle('Sensitivity/Specificity of KNN')
+```
+
+The specificity is really worse with KNN than was with Logit model for some reason and I wish not to proceed further with this model. Specificity is one of the important metrics particularly for this domain as specificity refers to the recall rate of the negative class and the negative class is those who default. Predicting poorly on those who default would cause risk to the financial health of the bank.  
+
+```{r}
+
+```
 
 
 
