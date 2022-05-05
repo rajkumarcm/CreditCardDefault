@@ -459,11 +459,17 @@ corrplot::corrplot(cor(data_f[, -1], method='spearman'), method='circle')
 ```
 
 ## Full model using Generalised Linear Model
+### 1st Attempt  
+
+This model was built with all data since I wanted an unbiased estimate of cofficients to understand by what factor the log(odds-ratio) is affected. 
+
 ```{r}
 full_model <- glm('default_r~.-id-age_group', data=data, family='binomial')
 # full_model
 summary(full_model)
 ```
+
+Since it is not the entire variable itself that is not-significant, instead just some levels that we cannot separate. We will have to stick to the all variables. Perhaps I can ignore the age.  
 
 ```{r leaps}
 # library("leaps")
@@ -483,13 +489,7 @@ get_cm <- function(predictions, model, co, g_truth)
   pred.list <- predictions
   pred.list[predictions <= co] <- 1
   pred.list[predictions > co] <- 2
-  cm <- matrix(0, nrow=2, ncol=2)
-  for(i in 1:length(pred.list))
-  {
-    actual <- g_truth[i]
-    pred <- pred.list[i]
-    cm[pred, actual] <- cm[pred, actual] + 1
-  }
+  cm <- table(pred.list, g_truth)
 return(cm)
 }
 
@@ -527,25 +527,6 @@ for(i in 1:length(co_values))
 # tmp_metrics
 # eval_df
 ```
-```{r viz_prec_rec, fig.height=5, fig.width=11}
-prec_recall <- ggplot() +
-               geom_line(data=eval_df, aes(x=Cutoff, y=Precision, color='blue'), lwd=1.2) +
-               geom_line(data=eval_df, aes(x=Cutoff, y=Recall, color='red'), lwd=1.2) +
-               xlab('Cutoff value') +
-               ylab('Precision/Recall') +
-               # labels(c('Precision', 'Recall')) +
-               ggtitle('Precision/Recall at different cutoff thresholds' )
-
-sens_spec <- ggplot() +
-             geom_line(data=eval_df, aes(x=Cutoff, y=Sensitivity, color='blue'), lwd=1.2) +
-             geom_line(data=eval_df, aes(x=Cutoff, y=Specificity, color='red'), lwd=1.2) +
-             xlab('Cutoff value') +
-             ylab('Sensitivity/Specificity') +
-             # labels(c('Precision', 'Recall')) +
-             ggtitle('Sensitivity/Specificity at different cutoff thresholds' )
-
-# grid.arrange(prec_recall, sens_spec, nrow=1)
-```
 
 ```{r}
 exp_coeff <- exp(full_model$coefficients)
@@ -558,9 +539,9 @@ Wish to include only those that affect the default rate substantially. Here coef
 
 Intercept - The intercept value `r exp_coeff[["(Intercept)"]]` means a person is less likely to default on average.  
 
-credit_limit - The chances of defaulting decreases by `r (1-exp_coeff[["credit_limit"]])*100`% for one unit of increase in credit limit. From this it can be inferred that people who typically default have lesser credit limit.  
+credit_limit - The odds-ratio of defaulting to not-defaulting decreases by a factor of `r exp_coeff[["credit_limit"]]` for one unit of increase in credit limit. From this it can be inferred that people who typically default have lesser credit limit.  
 
-genderFemale - The chances of defaulting decreases by `r (1-exp_coeff[["genderFemale"]])*100`% when the applicant is female.  
+genderFemale - The odds-ratio of defaulting to not-defaulting decreases by a factor of `r exp_coeff[["genderFemale"]]` when the applicant is female.  
 
 educationHigh School - The odds-ratio (defaulting to not defaulting) increases by a factor of `r exp_coeff[["educationHigh School"]]` when the applicant holds a High School qualification and the chances are substantial compared to those with other qualifications.  
 
@@ -570,133 +551,58 @@ age - For every increase in the unit, the odds ratio improve by a factor of `r e
 
 Commenting on the repayment status coefficient. Compared to all months, defaulting on `September` month appears to increase the odds-ratio by a factor of `r exp_coeff[["rs_sep-1"]]`.  
 
-Commenting on the amount paid coefficients. I normally do not average coefficients as it is generally considered an incorrect pracise. However, `ap` coefficients are almost same with slight variation. Hence in order to make a conclusion, I wish to average to mention by what factor on average paying bills every month affect the odds-ratio. The odds-ratio decreases by 
-`r (1-mean(exp_coeff[c("ap_sep", "ap_aug", "ap_july", "ap_june", "ap_may", "ap_apr")]))*100`% by bills monthly.  
+Commenting on the amount paid coefficients. I normally do not average coefficients as it is generally considered an incorrect pracise. However, `ap` coefficients are almost same with slight variation. Hence in order to make a conclusion, I wish to average to mention by what factor on average paying bills every month affect the odds-ratio. The odds-ratio decreases on average by a factor of 
+`r (mean(exp_coeff[c("ap_sep", "ap_aug", "ap_july", "ap_june", "ap_may", "ap_apr")]))` by paying bills monthly.  
 
 **Conclusions and revisions to SMART questions from Logit model**
 
-1. High School qualification holders have higher chances of making default on credit card bill. While this may not be intuitive, looking from a different perspective may provide further information. My understanding of such would be, even those with better qualification struggle to find a good job in Taiwan.  
+1. High School qualification holders have higher chances of making default on credit card bill. My understanding would be, even those with better qualification struggle to find a good job in Taiwan.  
 
 2. Contrary to our findings from EDA, females are less likely than males to default on their credit card bill. 
 
 3. Increase in age means more chances of defaulting. Conforming to my previous hypothesis, it is my understanding from the results that there is a job crisis in Taiwan that may be a latent factor. (China News)[https://www.taiwannews.com.tw/en/news/339690]  
 
-4. Yes, being married improves the chances of defaulting and it makes sense. Having said there is a job crisis, and perhaps an unreliable source of income, to handle the family requirements married people do default on their bill.  
+4. Yes, being married improves the chances of defaulting and it makes sense. Having said there is a job crisis, and perhaps an unreliable source of income, these factors lead to default on their bill.  
 
-Overall, my understanding from the EDA and the results conveyed by the Logit model is that the cause for all financial crisis in the country was caused by inadequate job openings to match the ever growing population. In order to reduce the financial risk of the banks, and to restore the overall financial health of the country, it would be imperative to consider measures that boost country's economy and at the same time create more job opportunities for everyone.  
+Overall, my understanding from the EDA and the results conveyed by the Logit model is that the cause for all financial crisis in the country was caused by inadequate job openings to match the ever growing population. In order to reduce the financial risk of the banks, and to restore the overall financial health of the country, it would be imperative to equal job opportunities for both Men and Women, and offer better education that I hope will improve the situation.  
 
-I have used full logit model primarily to see what variable affect the chances of defaulting and by what factor. For serious prective modeling, I wish to explore the performance of other Machine Learning models.  
 
-## Data Partitioning  
+### Data Partitioning  
 
+Here I wish to retain $80\%$ of the data for training since $20\%$ from the $80\%$ of training data will be taken for validation.  
 ```{r}
-
-# Split into train, test set by 2:1
-
 library(caret)
-
-set.seed(1234)
-trainIndex <- createDataPartition(data$default_r, p=.67,
-                                  list = FALSE,
-                                  times = 1)
-train_set <- data[trainIndex,]
-test_set <- data[-trainIndex,]
-
-```
-
-## KNN
-
-```{r }
-
-#---------- Cross validation
-
-# define training control
-train_control <- trainControl(method = "cv", number = 5)
-
-# train the model on training set
-model <- train(default_r ~.-id-age_group,
-               data = train_set,
-               tuneGrid   = expand.grid(k = 1:10),
-               trControl = train_control,
-               method = "knn",
-               metric='Accuracy')
-
-# print cv scores
-summary(model)
-```
-```{r}
-get_cm2 = function(pred.list, g_truth)
-{
-  cm <- matrix(0, nrow=2, ncol=2)
-  for(i in 1:length(pred.list))
-  {
-    actual <- g_truth[i]
-    pred <- pred.list[i]
-    cm[pred, actual] <- cm[pred, actual] + 1
-  }
-  return(cm)
-}
-```
-
-```{r}
-library(FNN)
-trainIndex <- createDataPartition(data$default_r, p=.8,
-                                  list = FALSE,
-                                  times = 1)
-c_indices <- c(2, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24)
-
-train_lbls <- data[trainIndex, 'default_r']
-test_lbls <- data[-trainIndex, 'default_r']
-train_set <- data[trainIndex, c_indices]
-test_set <- data[-trainIndex, c_indices]
-
-train_set <- scale(train_set, center=T, scale=T)
-test_set <- scale(test_set, center=T, scale=T)
-
-k_vals <- seq(5, 30, by=2)
-k_performance <- data.frame(matrix(0, nrow=length(k_vals), ncol=8))
-colnames(k_performance) <- c('K', 'Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy')
-
-for(i in 1:length(k_vals))
-{
-  k <- k_vals[i]
-  knn_pred <- knn(train=train_set, test=test_set, cl=train_lbls, k=k)
-  knn_pred <- as.numeric(knn_pred[1:nrow(test_set)])
-  tmp_cm <- get_cm2(knn_pred, test_lbls)
-  # tmp_cm
-  tmp_metrics <- get_evalmetrics(tmp_cm, full_model, length(knn_pred))
-  # tmp_metrics
-  k_performance[i,] <- c(k, tmp_metrics)
-}
-```
-
-```{r}
-k_performance
-```
-
-```{r}
-library(reshape2)
-molten.sens_spec <- melt(k_performance[, c("K", "Sensitivity", "Specificity")], id=c("K"))
-ggplot(molten.sens_spec, aes(x=K, y=value, color=variable)) + geom_line() +
-ggtitle('Sensitivity/Specificity of KNN')
-```
-
-The specificity is really worse with KNN than was with Logit model for some reason and I wish not to proceed further with this model. Perhaps this is because logit model was trained with full data rather than training set itself. Specificity is one of the important metrics particularly for this domain as specificity refers to the recall rate of the negative class and the negative class is those who default. Predicting poorly on those who default would cause risk to the financial health of the bank.  
-
-## GLM Second Attempt
-
-```{r}
-
+set.seed(123)
 trainIndex <- createDataPartition(data$default_r, p=.8,
                                   list = FALSE,
                                   times = 1)
 train_set <- data[trainIndex,]
 test_set <- data[-trainIndex,]
+
+print('Training set:')
+table(train_set$default_r)
+
+print('Testing set:')
+summary(test_set$default_r, main='Testing set')
+
+```
+The proportion of Default and Non-default size is the same between training and the test set.  
+
+Training yes - `r table(train_set$default_r)[2]/sum(table(train_set$default_r))`  
+Testing yes - `r table(test_set$default_r)[2]/sum(table(test_set$default_r))`  
+
+### GLM Second Attempt with training set
+```{r}
 
 full_model <- glm('default_r~.-id-age_group', data=train_set, family='binomial')
-
 ```
 
+Confusion Matrix on training set
+```{r}
+confusionMatrix(full_model$fitted.values, reference = train_set$default_r)
+```
+
+#### Evaluation on test set
 ```{r calculate_amt_risk}
 
 get_risky_amt <- function(cm, t_data)
@@ -769,23 +675,25 @@ grid.arrange(sens_spec.plot +
 
 The dashed vertical in red color represents the optimal cutoff threshold.  
 
-Confusion matrix for the cutoff value that shows intersecting Sensitivity and Specificity would be:  
+**Confusion matrix** for the cutoff value that shows intersecting Sensitivity and Specificity would be:  
 
 ```{r}
 tmp_cm <- get_cm(fm.y_prob, full_model, 0.3775510, test_set$default_r) # cutoff value = 0.3775510
-row.names(tmp_cm) <- c("Pred No", "Pred Yes")
-colnames(tmp_cm) <- c("Actual No", "Actual Yes")
+# row.names(tmp_cm) <- c("Pred No", "Pred Yes")
+# colnames(tmp_cm) <- c("Actual No", "Actual Yes")
 tmp_cm
 tmp_metrics <- data.frame(matrix(0, nrow=1, ncol=7))
 colnames(tmp_metrics) <- c('Precision', 'Recall', 'Sensitivity', 'Specificity', 'F1', 'McFadden', 'Accuracy')
 tmp_metrics[1,] <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
-tmp_metrics
+# tmp_metrics
 ```
+**Performance Metrics** at optimal cut-off threshold.  
 
 ```{r}
 rmarkdown::paged_table(data.frame(t(tmp_metrics)))
 ```
 
+**ROC Curve and AUC**
 ```{r}
 library(pROC)
 
@@ -799,8 +707,18 @@ roc(test_lbls, fm.y_prob,
 For this model, $0.3775510$ would be the optimal cut-off value since it gives a good balance between both Sensitivity and Specificity. A question may naturally come in mind why not select a slightly lower cut-off value that would result in even better Specificity (recall of defaulter class). The answer to that is, although it may result in better default prediction, it may also result in losing potential clients by classifying those who would not default as high chance of defaulting. This means, such a mis-classification may lead to reduced credit limit assigned to potential clients that may make them explore other banks. Hence, a good balance of Sensitivity and Specificity at approximately 75% accuracy appears a good fit. Also the AUC is above the mark.  
 
 
+**Residual plot**
+```{r}
+plot(full_model)
+```
+Chi-square on null deviance: `r pchisq(full_model$null.deviance, full_model$df.null, lower.tail=F)`  
+Chi-square on residual deviance: `r pchisq(full_model$deviance, full_model$df.residual, lower.tail=F)`  
 
-## Conclusions from predictions 
+Both the pvalues were below the significant threshold that says the model is not a good fit.  
+
+#### Conclusions from predictions 
+
+A sample is taken from the test set (non-defaulter) and let's first make a prediction so that we can make comparison with the result when we would change the data.  
 
 ```{r}
 # I am doing head here since they will transfer the factor level information
@@ -814,6 +732,7 @@ newdata[1, 19:24] <- colMeans(test_set[test_set$default_r=='No', 19:24])
 hyp_res <- predict.glm(full_model, newdata, type='response')
 hyp_res
 ```
+Now I wish to change the repayment status to 2 months due for september and assess how repayment status affect the chances of defaulting.  
 
 ```{r}
 newdata2 <- newdata
@@ -822,14 +741,19 @@ hyp_res <- predict.glm(full_model, newdata2, type='response')
 hyp_res
 ```
 
-A sample was taken from those who do not default and I only changed the repayment status of the last month to 2 (2 months due) and the model predicted that there is a high chances of this person making a default.  This confirms one of our previous statements how important rs_sep is in the model.  
+The probability has increased from ~0.2 to ~0.63 and this clearly demonstrates the effect the credit history in predicting whether the client would default on their next month bill.  
 
+Using the original data point that we sampled from the test set, this time I wish to change the gender to Female to observe the change in probability value.  
 ```{r}
 newdata3 <- newdata
 newdata$gener <- 'Female'
 hyp_res <- predict.glm(full_model, newdata3, type='response')
 hyp_res
 ```
+
+Not much different. Initially there was difference when I did not set the seed to 123. Now after the seed has been set, the results are somewhat consistent.  
+
+Again, I wish to change the qualification to University from High School to observe the changes in possibility of defaulting.  
 
 ```{r}
 newdata4 <- newdata
@@ -839,19 +763,74 @@ hyp_res <- predict.glm(full_model, newdata4, type='response')
 hyp_res
 ```
 
-My conclusion regarding who default the most was once again confirmed by the decrease in the probability when I switched from education from High School to University.  
+Clearly the probability has went down this time. It is high school qualification holders who are more likely to default than University level qualification holders.  
 
-## Decision Tree
+
+### KNN on scaled data
+
+```{r }
+data2 <- data
+data2 <- data2[, c(-1, -26)] # id, age_group
+data2$rs_sep <- ifelse(as.numeric(as.character(data$rs_sep)) >= 1, 'Due', 'Good')
+data2$rs_aug <- ifelse(as.numeric(as.character(data$rs_aug)) >= 1, 'Due', 'Good')
+data2$rs_july <- ifelse(as.numeric(as.character(data$rs_july)) >= 1, 'Due', 'Good')
+data2$rs_june <- ifelse(as.numeric(as.character(data$rs_june)) >= 1, 'Due', 'Good')
+data2$rs_may <- ifelse(as.numeric(as.character(data$rs_may)) >= 1, 'Due', 'Good')
+data2$rs_apr <- ifelse(as.numeric(as.character(data$rs_apr)) >= 1, 'Due', 'Good')
+
+data2$rs_sep <- factor(data2$rs_sep)
+data2$rs_aug <- factor(data2$rs_aug)
+data2$rs_july <- factor(data2$rs_july)
+data2$rs_june <- factor(data2$rs_june)
+data2$rs_may <- factor(data2$rs_may)
+data2$rs_apr <- factor(data2$rs_apr)
+
+#---------- Cross validation
+
+# define training control
+
+trainIndx <- createDataPartition(data2$default_r, p=0.8, list=F)
+train_set <- data2[trainIndx,]
+test_set <- data2[-trainIndx,]
+
+library(ezids)
+train_set <- uzscale(train_set)
+test_set <- uzscale(test_set)
+
+train_control <- trainControl(method = "cv", number = 5, allowParallel=T)
+
+# train the model on training set
+knnModel <- train(default_r ~.,
+               data = train_set,
+               trControl = train_control,
+               method = "knn",
+               metric='Accuracy', tuneLength=20)
+
+# print cv scores
+knnModel
+```
+
+#### Evaluate KNN on Test set  
+
+```{r}
+knn_pred <- predict(knnModel, newdata=test_set)
+confusionMatrix(knn_pred, reference=test_set$default_r)
+```
+The cross validation on KNN does show decent amount of accuracy. However the Specificity is not adequate enough in comparison with what we got from the Logit model. Hence, I wish not to proceed further in this direction.    
+
+### Decision Tree 
 
 ```{r}
 
 library(rpart)
+library(rpart.rules)
 library(rattle)
+
+trainIdx <- createDataPartition(data$default_r, p=0.8, list=F)
+train_set <- data[trainIdx,]
+test_set <- data[-trainIdx,]
+
 tree_cnames <- colnames(train_set)[is.na(pmatch(colnames(train_set), c("id", "age_group")))]
-#[, colnames(train_set)[is.na(pmatch(colnames(train_set), c("id", "age_group")))]]
-#credit_limit+gender+education+marital+age+rs_sep+rs_aug+rs_july+rs_june+rs_may+rs_apr+
-                  # bs_sep+bs_aug+bs_july+bs_june+bs_may+bs_apr+ap_sep+ap_aug+ap_july+ap_june+ap_may+ap_apr
-# rs_sep+rs_aug+rs_july+rs_june+rs_may+rs_apr+bs_sep+ap_sep+age
 
 weights <- rep(0, nrow(train_set))
 weights[train_set$default_r=='Yes'] <- 0.63
@@ -862,14 +841,35 @@ weights[train_set$default_r=='No'] <- 0.37
 dt_fit <- rpart(default_r~., data=train_set[, tree_cnames], method="class", weights=weights)
 fancyRpartPlot(dt_fit)
 ```
+If you would download or open the above Decision Tree image in a new tab, you will see the rules are very intuitive. However the quality of the image itself is very bad. Hence I will use `rpart.plot` to get the rules from the Decision Tree.  
 
+```{r dt_rules}
+rpart.rules(dt_fit, cover=T)
+```
+
+```{r}
+var_importance <- pruned.tree$variable.importance
+var_importance <- round(var_importance/sum(var_importance), 2)
+var_importance <- data.frame(var_importance)
+importance <- var_importance$var_importance
+var_names <- row.names(var_importance)
+var_importance <- cbind(var_names, importance)
+var_importance <- data.frame(var_importance)
+colnames(var_importance) <- c("Variable", "Importance")
+ggplot(var_importance, aes(x=Variable, y=Importance)) +
+geom_bar(stat='identity', position='identity') +
+  ggtitle('Importance of variables in the Decision Tree (normalised)')
+```
+
+As you could see from the rules table, when the rs_sep is -2 or -1 or 0 and the bs_sep < 0.66 (normalized) then the chances of defaulting is ~0.38 
+And most of the nodes that remain after the pruning process are repayment status, bill status and amount paid. Other information such as age, marital, education, credit limit were discarded. 
+
+**Confusion Matrix**  
 
 ```{r eval_dt}
 dt_cm = confusionMatrix( predict(dt_fit, newdata=test_set[, tree_cnames], type = "class"), reference = test_set$default_r )
 print('Overall: ')
 dt_cm$overall
-print('Class: ')
-dt_cm$byClass
 ```
 
 ```{r}
@@ -879,6 +879,40 @@ rmarkdown::paged_table(data.frame(dt_cm$byClass))
 ```{r}
 dt_cm
 ```
+This is not a clear plot.  
 
+```{r}
+plot(pruned.tree)
+text(pruned.tree)
+```
+
+Although this produced a Specificity around $80\%$, this was not what the measure it produced initially. I had to provide prior weights that made the Decision Tree to act a little biased and produced this result. To address this bias, and to learn from what has been misclassified, there is another method called AdaBoost. AdaBoost is a boosting algorithm based on a collection of stumps (single node decision tree) and each stump learns from the mistake the previous stump made. They learn by altering the weights of samples that was incorrectly classified and regenerate (perhaps duplicate) the sample many times so that the consequent learner can avoid making the same mistake. Each stump, based on the data, selects the best attribute based on Gini or Entropy measure. Finally based on the total number of correct classification `actualSay` metric is computed that is then used to decide which stump has more privileged vote compared to the others.  
+
+### Ada Boost
+This will take some time to run.  
+```{r}
+library(randomForest)
+# renamed to train_set2 so when you rerun it does not mess up
+train_set2 <- train_set[, c(-1, -26)] # id, age_group
+test_set2 <- test_set[, c(-1, -26)]
+
+# adaboost_ctrl <- trainControl(method='oob', number=5)
+
+# train the model on training set
+ab_fit <- train(default_r ~.,
+                 data = train_set2,
+                 # trControl = adaboost_ctrl,
+                 method = "adaboost",
+                 metric='Accuracy')
+
+```
+
+# References
+
+1. Wang, E. (2006). The Taiwan Credit Card Crisis - Financial Ethics. Sevenpillarsinstitute.org. Retrieved May 1, 2022, from https://sevenpillarsinstitute.org/case-studies/taiwans-credit-card-crisis/  
+
+2. Eberle, W., Islam, S. R., &amp; Ghafoor, S. K. (2018, July 2). Credit Default Mining Using Combined Machine Learning and Heuristic Approach. Retrieved May 1, 2022, from https://arxiv.org/ftp/arxiv/papers/1807/1807.01176.pdf 
+
+3. France-Presse, A. (2006, December 8). Job shortage predicted in China: Taiwan news: 2006-12-09 00:00:00. Taiwan News. Retrieved May 1, 2022, from https://www.taiwannews.com.tw/en/news/339690 
 
 
