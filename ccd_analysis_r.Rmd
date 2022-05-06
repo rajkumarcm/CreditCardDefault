@@ -15,8 +15,8 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(warning = F, results = "hide", message = F)
+options(scientific=T, digits = 3) 
 library(readxl)
 library(ggplot2)
 library(gridExtra)
@@ -75,19 +75,41 @@ Several financial firms around the globe are taking stringent measures to preven
 
 1. Are people with better educational qualification exhibit better repayment pattern?  
 2. Is there a specific gender that is more prone to making default?  
-3. Are mid-age people less likely to default as they may have a secured job?  
 4. Are married people more likely to default as to the increased financial requirement for them?  
-5. Can reducing the credit limit in turn reduce the default risk at the same time not lose the client?
-(Subject to revision after EDA)  
+5. What measures can be taken to mitigate the risks of insolvency?
+
 
 # Data
 
-## Description
+## Overview
 ```{r}
 str(data)
 ```
 
-## Overview
+## Description
+
+**Explanation for notable variables**  
+
+Variable | Description  
+---- | ----
+rs | repayment status  
+bs | bill statement
+ap | amount paid
+default_r | Whether the client has defaulted (response variable)  
+
+
+**Repayment Status Level Description**  
+
+Level | Description
+---- | ----
+-2 | No consumption of credit
+-1 | Paid promptly
+0 | Use of revolving credit
+1..8 | Represents the number of months due
+9 | Due for 9 months or over  
+
+
+## Head and Tail
 ```{r, results='markup'}
 rmarkdown::paged_table(head(data, 5))
 rmarkdown::paged_table(tail(data, 5))
@@ -137,7 +159,7 @@ ttest.credit_limit
 
 ## Age and Default
 
-```{r age_default, fig.height=5, fig.width=12}
+```{r age_default, fig.height=5, fig.width=12, results='markup'}
 
 hist.age <- ggplot(data, aes(x=age)) +
             geom_histogram(color='white') +
@@ -164,11 +186,11 @@ ttest.age_default <- t.test(data[data$default_r=="Yes", 'age'],
 ttest.age_default
 ```
 
-The `t.test` on age between those defaulted on their credit card bills and those who did not, returned a `p.value` of `r ttest.age_default$p.value`. In simple words, the age does have a connection on those who default.  
+The `t.test` on age between those who defaulted on their credit card bills and those who did not, returned a `p.value` of `r ttest.age_default$p.value`. In simple words, the difference in age between the two subgroups is not equal to 0.  
 
 Since difference in age between those who default and who do not is elusive on the right side boxplot, I have performed a 1-sample t-test to determine the 95% confidence interval. While the age of those who default typically fall between `r ttest_1s_default_age$conf.int[1:2]`, the age of those who do not typically fall between `r ttest_1s_ndefault_age$conf.int[1:2]` at 95% confidence level. There is a strong overlap in the confidence interval and I believe it is difficult to understand from the macroscopic level. Perhaps we need to use the power of EDA to break down the age by different categories to further understand the pattern.  
 
-```{r, fig.height=5, fig.width=12}
+```{r, fig.height=5, fig.width=12, results='markup'}
 # Group them so we can have an overall understanding of at which age the default
 # happens
 data$age_group = 0
@@ -206,7 +228,7 @@ I have grouped age into different categories so that it is possible to understan
 
 ## Education and Default
 
-```{r}
+```{r, results='markup'}
 
 educ_default_cont <- table(data$default, data$education)
 chisq.educ_default <- chisq.test(educ_default_cont)
@@ -223,9 +245,23 @@ chisq.educ_default
 
 It was my initial understanding that it would be school going young students who were the primary target for the credit card business, but the results show those with University qualification default the most. Although it makes sense that the financial requirement of students at the University level may be inclined, the conclusion I would like draw from this is that the initial news report mentioned the banks targeted school students as they were apparently the ones who weren't applying for credit cards and I believe, it was a conscious move to expand their business and does not necessarily mean they were the ones who most default.  
 
+### Education and Amount Paid in September  
+```{r, results='markup'}
+educ_ap_sep <- aov(ap_sep~education, data=data)
+summary(educ_ap_sep)
+```
+
+### Education and Amount Paid in July
+```{r, results='markup'}
+educ_ap_july <- aov(ap_july~education, data=data)
+summary(educ_ap_july)
+```
+
+Amount paid by people with different qualification differs on average, as per the ANOVA results. In other words we choose Alternative hypothesis that the mean of amount paid by different subgroups are not the same.  
+
 ## Marital and Default
 
-```{r marital_default}
+```{r marital_default, results='markup'}
 # Marital status (1 = married; 2 = single; 3 = others)
 # Remove rows that have marital 0 since it is not given any meaning
 
@@ -246,8 +282,22 @@ chisq.marital_default
 
 I tried ignoring the `Others` column from including in contingency table and re-running the chi-squared test and it still produced a `p.value` of `r chisq.marital_default$p.value` pointing to the fact that two groups `Single` and `Married` do have an effect on `default`.  
 
+## Marital and Amount paid in September  
+```{r, results='markup'}
+marital_ap_sep <- aov(ap_sep~marital, data=data)
+summary(marital_ap_sep)
+```
+
+## Marital and Amount paid in July  
+```{r, results='markup'}
+marital_ap_july <- aov(ap_july~marital, data=data)
+summary(marital_ap_july)
+```
+
+The ANOVA test results show that the amount paid by Married, Single and Others are different on average.  
+
 ## Gender and default
-```{r}
+```{r, results='markup'}
 
 gender_default_cont <- table(data$gender, data$default_r)
 chisq.gender_default <- chisq.test(gender_default_cont)
@@ -260,7 +310,7 @@ hist.gender_default
 chisq.gender_default
 ```
 
-From the above plot, it can be understood that Females are more likely to default compared to Males. Why is this the case ? A possible cause could be a bias in education. Let's understand this further.  
+From the above plot, it can be understood that there are more number of Females who default compared to Males. Why is this the case ? A possible cause could be a bias in education. Let's understand this further. Also there are more number of Females who have not defaulted on their bill.  
 
 ```{r gender_education, fig.height=5, fig.width=11}
 
@@ -283,7 +333,7 @@ hist.female_educ <- ggplot(data[data$gender=='Female',], aes(x=education)) +
 grid.arrange(hist.male_educ, hist.female_educ, nrow=1)
 ```
 
-The results were surprising as it was believed there was gap in education in Females that led to more defaulting, but from the plot it appears they are more qualified than Males. Now I believe I can make a connection of this finding to a plot under `Education and Default` that showed University goers or those who hold a University level qualification are the ones with more financial demands. In other words, they are the ones who most typically default. Hence the conclusion is, since Females are the ones with most University level qualification, they often face difficulties in repaying their credit card bill.  
+The results were surprising as it was believed there was gap in education in Females that led to more defaulting, but from the plot it appears they are more qualified than Males. Now I believe I can make a connection of this finding to a plot under `Education and Default` that showed University level qualification holders are the ones with more financial demands. In other words, they are the ones who most typically default. Hence the conclusion is, since Females are the ones with most University level qualification, they often face difficulties in repaying their credit card bill.  
 
 
 ## Repayment Status Pattern
@@ -463,7 +513,7 @@ corrplot::corrplot(cor(data_f[, -1], method='spearman'), method='circle')
 
 This model was built with all data since I wanted an unbiased estimate of cofficients to understand by what factor the log(odds-ratio) is affected. 
 
-```{r}
+```{r, results='markup'}
 full_model <- glm('default_r~.-id-age_group', data=data, family='binomial')
 # full_model
 summary(full_model)
@@ -471,15 +521,18 @@ summary(full_model)
 
 Since it is not the entire variable itself that is not-significant, instead just some levels that we cannot separate. We will have to stick to the all variables. Perhaps I can ignore the age.  
 
+
 ```{r leaps}
-# library("leaps")
-# data.renamed <- data
-# cnames <- colnames(data.renamed)
-# cnames[which(cnames == 'default_r')] <- 'y'
-# colnames(data.renamed) <- cnames
-# reg.leaps <- regsubsets(y~., data = data.renamed, nbest = 1, method = "exhaustive", really.big = T)  # leaps,
-# plot(reg.leaps, scale = "adjr2", main = "Adjusted R^2")
+library("leaps")
+data.renamed <- data
+cnames <- colnames(data.renamed)
+cnames[which(cnames == 'default_r')] <- 'y'
+colnames(data.renamed) <- cnames
+reg.leaps <- regsubsets(y~., data = data.renamed, nbest = 1, method = "exhaustive", really.big = T)  # leaps,
+plot(reg.leaps, scale = "adjr2", main = "Adjusted R^2")
 ```
+
+I wish not to select features based on the regsubsets plot as I strongly believe it misses out on many important variables that play critical role in predicting whether a person would default on his/her next month bill.  
 
 ```{r metrics_fn}
 
@@ -528,7 +581,7 @@ for(i in 1:length(co_values))
 # eval_df
 ```
 
-```{r}
+```{r, results='markup'}
 exp_coeff <- exp(full_model$coefficients)
 exp_coeff
 ```
@@ -541,7 +594,7 @@ Intercept - The intercept value `r exp_coeff[["(Intercept)"]]` means a person is
 
 credit_limit - The odds-ratio of defaulting to not-defaulting decreases by a factor of `r exp_coeff[["credit_limit"]]` for one unit of increase in credit limit. From this it can be inferred that people who typically default have lesser credit limit.  
 
-genderFemale - The odds-ratio of defaulting to not-defaulting decreases by a factor of `r exp_coeff[["genderFemale"]]` when the applicant is female.  
+genderFemale - The odds-ratio of defaulting to not-defaulting decreases by a factor of `r exp_coeff[["genderFemale"]]` when the applicant is female. 
 
 educationHigh School - The odds-ratio (defaulting to not defaulting) increases by a factor of `r exp_coeff[["educationHigh School"]]` when the applicant holds a High School qualification and the chances are substantial compared to those with other qualifications.  
 
@@ -550,6 +603,8 @@ maritalMarried - The odds-ratio improves by a factor of `r exp_coeff[["maritalMa
 age - For every increase in the unit, the odds ratio improve by a factor of `r exp_coeff[["age"]]`.  
 
 Commenting on the repayment status coefficient. Compared to all months, defaulting on `September` month appears to increase the odds-ratio by a factor of `r exp_coeff[["rs_sep-1"]]`.  
+
+Regarding the gender and education, I believe some of the visual plots and initial conclusions made in the EDA were skewed by the SMOTE process.  
 
 Commenting on the amount paid coefficients. I normally do not average coefficients as it is generally considered an incorrect pracise. However, `ap` coefficients are almost same with slight variation. Hence in order to make a conclusion, I wish to average to mention by what factor on average paying bills every month affect the odds-ratio. The odds-ratio decreases on average by a factor of 
 `r (mean(exp_coeff[c("ap_sep", "ap_aug", "ap_july", "ap_june", "ap_may", "ap_apr")]))` by paying bills monthly.  
@@ -570,7 +625,7 @@ Overall, my understanding from the EDA and the results conveyed by the Logit mod
 ### Data Partitioning  
 
 Here I wish to retain $80\%$ of the data for training since $20\%$ from the $80\%$ of training data will be taken for validation.  
-```{r}
+```{r, results='markup'}
 library(caret)
 set.seed(123)
 trainIndex <- createDataPartition(data$default_r, p=.8,
@@ -598,8 +653,11 @@ full_model <- glm('default_r~.-id-age_group', data=train_set, family='binomial')
 ```
 
 Confusion Matrix on training set
-```{r}
-confusionMatrix(full_model$fitted.values, reference = train_set$default_r)
+```{r, results='markup'}
+tr_pred <- full_model$fitted.values
+tr_pred <- ifelse(tr_pred > 0.37, 'Yes', 'No') # I got this value after the following steps
+tr_pred <- factor(tr_pred)
+confusionMatrix(tr_pred, reference = train_set$default_r)
 ```
 
 #### Evaluation on test set
@@ -610,13 +668,13 @@ get_risky_amt <- function(cm, t_data)
   FN <- cm[1, 2]
   # Exactly picking those mislcassified observations 
   # and doing an average is not probably a good idea since 
-  # depending on the subset the there will be variation in prediction. 
+  # depending on the subset (in k-fold) the there will be variation in prediction. 
   # Hence an average balance from a sample of misclassification size
   # would be adequate
   test_subset_indices <- sample(nrow(t_data), FN, replace=F)
   test_subset <- t_data[test_subset_indices,]
-  total_bill <- colSums(test_subset[, 13:18])
-  total_paid <- colSums(test_subset[, 19:24])
+  total_bill <- colSums(test_subset[, 13:18]) # bs for all months
+  total_paid <- colSums(test_subset[, 19:24]) # ap for all months
   avg_due_person <- sum(total_bill - total_paid) # average due per person
   return(avg_due_person)
 }
@@ -644,6 +702,7 @@ for(i in 1:length(co_values))
 ```
 
 ```{r fig.height=5, fig.width=11}
+library(reshape2)
 prec_recall.molten <- melt(eval_df[, c("Cutoff", "Precision", "Recall")], id=c("Cutoff"))
 sens_spec.molten <- melt(eval_df[, c("Cutoff", "Sensitivity", "Specificity")], id=c("Cutoff"))
 
@@ -677,7 +736,7 @@ The dashed vertical in red color represents the optimal cutoff threshold.
 
 **Confusion matrix** for the cutoff value that shows intersecting Sensitivity and Specificity would be:  
 
-```{r}
+```{r, results='markup'}
 tmp_cm <- get_cm(fm.y_prob, full_model, 0.3775510, test_set$default_r) # cutoff value = 0.3775510
 # row.names(tmp_cm) <- c("Pred No", "Pred Yes")
 # colnames(tmp_cm) <- c("Actual No", "Actual Yes")
@@ -689,7 +748,7 @@ tmp_metrics[1,] <- get_evalmetrics(tmp_cm, full_model, length(fm.y_prob))
 ```
 **Performance Metrics** at optimal cut-off threshold.  
 
-```{r}
+```{r, results='markup'}
 rmarkdown::paged_table(data.frame(t(tmp_metrics)))
 ```
 
@@ -697,7 +756,7 @@ rmarkdown::paged_table(data.frame(t(tmp_metrics)))
 ```{r}
 library(pROC)
 
-roc(test_lbls, fm.y_prob,
+roc(test_set$default_r, fm.y_prob,
             smoothed = TRUE,
             plot=TRUE, grid=TRUE,
             print.auc=TRUE, show.thres=TRUE)
@@ -720,7 +779,7 @@ Both the pvalues were below the significant threshold that says the model is not
 
 A sample is taken from the test set (non-defaulter) and let's first make a prediction so that we can make comparison with the result when we would change the data.  
 
-```{r}
+```{r, results='markup'}
 # I am doing head here since they will transfer the factor level information
 newdata <- head(test_set[test_set$default_r=='No',], 1)
 newdata$gender <- 'Male'
@@ -732,9 +791,10 @@ newdata[1, 19:24] <- colMeans(test_set[test_set$default_r=='No', 19:24])
 hyp_res <- predict.glm(full_model, newdata, type='response')
 hyp_res
 ```
+
 Now I wish to change the repayment status to 2 months due for september and assess how repayment status affect the chances of defaulting.  
 
-```{r}
+```{r, results='markup'}
 newdata2 <- newdata
 newdata2$rs_sep <- factor(2)
 hyp_res <- predict.glm(full_model, newdata2, type='response')
@@ -744,7 +804,8 @@ hyp_res
 The probability has increased from ~0.2 to ~0.63 and this clearly demonstrates the effect the credit history in predicting whether the client would default on their next month bill.  
 
 Using the original data point that we sampled from the test set, this time I wish to change the gender to Female to observe the change in probability value.  
-```{r}
+
+```{r, results='markup'}
 newdata3 <- newdata
 newdata$gener <- 'Female'
 hyp_res <- predict.glm(full_model, newdata3, type='response')
@@ -755,7 +816,7 @@ Not much different. Initially there was difference when I did not set the seed t
 
 Again, I wish to change the qualification to University from High School to observe the changes in possibility of defaulting.  
 
-```{r}
+```{r, results='markup'}
 newdata4 <- newdata
 newdata4$age <- 34
 newdata4$education <- 'University'
@@ -768,7 +829,9 @@ Clearly the probability has went down this time. It is high school qualification
 
 ### KNN on scaled data
 
-```{r }
+```{r, results='markup'}
+library(doParallel)
+
 data2 <- data
 data2 <- data2[, c(-1, -26)] # id, age_group
 data2$rs_sep <- ifelse(as.numeric(as.character(data$rs_sep)) >= 1, 'Due', 'Good')
@@ -797,6 +860,8 @@ library(ezids)
 train_set <- uzscale(train_set)
 test_set <- uzscale(test_set)
 
+cl <- makePSOCKcluster(8)
+registerDoParallel(cl)
 train_control <- trainControl(method = "cv", number = 5, allowParallel=T)
 
 # train the model on training set
@@ -805,17 +870,18 @@ knnModel <- train(default_r ~.,
                trControl = train_control,
                method = "knn",
                metric='Accuracy', tuneLength=20)
-
+stopCluster(cl)
 # print cv scores
 knnModel
 ```
 
 #### Evaluate KNN on Test set  
 
-```{r}
+```{r, results='markup'}
 knn_pred <- predict(knnModel, newdata=test_set)
 confusionMatrix(knn_pred, reference=test_set$default_r)
 ```
+
 The cross validation on KNN does show decent amount of accuracy. However the Specificity is not adequate enough in comparison with what we got from the Logit model. Hence, I wish not to proceed further in this direction.    
 
 ### Decision Tree 
@@ -823,7 +889,7 @@ The cross validation on KNN does show decent amount of accuracy. However the Spe
 ```{r}
 
 library(rpart)
-library(rpart.rules)
+library(rpart.plot)
 library(rattle)
 
 trainIdx <- createDataPartition(data$default_r, p=0.8, list=F)
@@ -841,14 +907,20 @@ weights[train_set$default_r=='No'] <- 0.37
 dt_fit <- rpart(default_r~., data=train_set[, tree_cnames], method="class", weights=weights)
 fancyRpartPlot(dt_fit)
 ```
+
 If you would download or open the above Decision Tree image in a new tab, you will see the rules are very intuitive. However the quality of the image itself is very bad. Hence I will use `rpart.plot` to get the rules from the Decision Tree.  
 
-```{r dt_rules}
-rpart.rules(dt_fit, cover=T)
+```{r dt_rules, results='markup'}
+rmarkdown::paged_table(rpart.rules(dt_fit, cover=T))
 ```
 
+As you could see from the rules table, when the rs_sep is -2 or -1 or 0 and the bs_sep < 0.66 (normalized) then the chances of defaulting is ~0.38 
+And most of the nodes that remain after the pruning process are repayment status, bill status and amount paid. Other information such as age, marital, education, credit limit were discarded. 
+
+**Importance of variables**  
+
 ```{r}
-var_importance <- pruned.tree$variable.importance
+var_importance <- dt_fit$variable.importance
 var_importance <- round(var_importance/sum(var_importance), 2)
 var_importance <- data.frame(var_importance)
 importance <- var_importance$var_importance
@@ -861,29 +933,28 @@ geom_bar(stat='identity', position='identity') +
   ggtitle('Importance of variables in the Decision Tree (normalised)')
 ```
 
-As you could see from the rules table, when the rs_sep is -2 or -1 or 0 and the bs_sep < 0.66 (normalized) then the chances of defaulting is ~0.38 
-And most of the nodes that remain after the pruning process are repayment status, bill status and amount paid. Other information such as age, marital, education, credit limit were discarded. 
+Now if you recall what I mentioned in the feature selection section and contrast this plot with that, my decision would make sense.  
 
 **Confusion Matrix**  
 
-```{r eval_dt}
+```{r eval_dt, results='markup'}
 dt_cm = confusionMatrix( predict(dt_fit, newdata=test_set[, tree_cnames], type = "class"), reference = test_set$default_r )
 print('Overall: ')
 dt_cm$overall
 ```
 
-```{r}
+```{r, results='markup'}
 rmarkdown::paged_table(data.frame(dt_cm$byClass))
 ```
 
-```{r}
+```{r, results='markup'}
 dt_cm
 ```
 This is not a clear plot.  
 
-```{r}
-plot(pruned.tree)
-text(pruned.tree)
+```{r, results='markup'}
+plot(dt_fit)
+text(dt_fit)
 ```
 
 Although this produced a Specificity around $80\%$, this was not what the measure it produced initially. I had to provide prior weights that made the Decision Tree to act a little biased and produced this result. To address this bias, and to learn from what has been misclassified, there is another method called AdaBoost. AdaBoost is a boosting algorithm based on a collection of stumps (single node decision tree) and each stump learns from the mistake the previous stump made. They learn by altering the weights of samples that was incorrectly classified and regenerate (perhaps duplicate) the sample many times so that the consequent learner can avoid making the same mistake. Each stump, based on the data, selects the best attribute based on Gini or Entropy measure. Finally based on the total number of correct classification `actualSay` metric is computed that is then used to decide which stump has more privileged vote compared to the others.  
@@ -891,21 +962,68 @@ Although this produced a Specificity around $80\%$, this was not what the measur
 ### Ada Boost
 This will take some time to run.  
 ```{r}
-library(randomForest)
+
 # renamed to train_set2 so when you rerun it does not mess up
-train_set2 <- train_set[, c(-1, -26)] # id, age_group
-test_set2 <- test_set[, c(-1, -26)]
-
-# adaboost_ctrl <- trainControl(method='oob', number=5)
-
-# train the model on training set
-ab_fit <- train(default_r ~.,
-                 data = train_set2,
-                 # trControl = adaboost_ctrl,
-                 method = "adaboost",
-                 metric='Accuracy')
+# train_set2 <- train_set[, c(-1, -26)] # id, age_group
+# test_set2 <- test_set[, c(-1, -26)]
+# 
+# # adaboost_ctrl <- trainControl(method='oob', number=5)
+# 
+# # train the model on training set
+# ab_fit <- train(default_r ~.,
+#                  data = train_set2,
+#                  # trControl = adaboost_ctrl,
+#                  method = "adaboost",
+#                  metric='Accuracy')
 
 ```
+
+
+Adaboost appears to take over 2 hours to train and due to time constraints, I wish not to proceed further with this model.  
+
+### Random Forest
+```{r rf, results='markup'}
+library(randomForest)
+
+train_lbls <- train_set$default_r
+train_set3 <- train_set[, c(-1, -25, -26)] # id, default_r, age_group
+test_lbls <- test_set$default_r
+test_set3 <- test_set[, c(-1, -25, -26)]
+
+rfFit <- randomForest(x=train_set3, y=train_lbls, importance=T)
+rfFit
+```
+
+```{r, results='markup'}
+rf_pred <- predict(rfFit, test_set)
+confusionMatrix(rf_pred, reference=test_lbls)
+```
+
+Try changing the class weights
+```{r, results='markup'}
+weights <- train_lbls
+weights <- ifelse(train_lbls=='Yes', 0.7, 0.3)
+rfFit2 <- randomForest(x=train_set3, y=train_lbls, importance=T, weights=weights)
+
+```
+
+**Confusion Matrix** on Train set
+```{r, results='markup'}
+rf_pred2_tr <- predict(rfFit2, train_set3)
+confusionMatrix(rf_pred2_tr, reference=train_lbls)
+```
+
+**Confusion Matrix** on Test set
+```{r, results='markup'}
+rf_pred2_ts <- predict(rfFit2, test_set)
+confusionMatrix(rf_pred2_ts, reference=test_lbls)
+```
+
+Comparing the metrics on both Training and Testing sets, I can not see any sign of overfitting. Hence I wish not to prune or alter the depth of the tree that acts as a regularization.  
+
+The random forest after adjusting the class weights gives slightly better results, and due to time constraints I wish to end my research here. The adaboost code is in the Rmd file and it appears to take over 2 hours to complete. It is not feasible to re-run for every single change we make to adaboost code. Hence I have decided to comment it.  
+
+My conclusion regarding the modeling is, Decision Trees are great in coming up with good set of rules, and therefore they are much better compared to Logistic Regression and KNN, at least the case with this dataset. 
 
 # References
 
